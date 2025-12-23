@@ -54,6 +54,14 @@ static void wrapPosition(glm::vec3& p, float size) {
 	p.z = wrapFloat(p.z, size);
 }
 
+glm::vec3 wrapPlanetPosition(const glm::vec3& planetPos) {
+	glm::vec3 p = planetPos;
+	p.x = wrapFloat(p.x - eye_center.x, WORLD_SIZE) + eye_center.x;
+	p.y = wrapFloat(p.y - eye_center.y, WORLD_SIZE) + eye_center.y;
+	p.z = wrapFloat(p.z - eye_center.z, WORLD_SIZE) + eye_center.z;
+	return p;
+}
+
 static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
 		glfwSetWindowShouldClose(w, 1);
@@ -223,6 +231,13 @@ GLuint planetProgramID;
 GLuint planetMatrixID;
 GLuint planetModelID;
 
+struct Planet {
+	glm::vec3 position;
+	float radius;
+};
+
+std::vector<Planet> planets;
+
 void createSphere(int stacks, int slices) {
 	// Sphere formula (inspired in quiz and lighting lecture
 	// x= sin(ϕ) * cos(θ)
@@ -318,6 +333,12 @@ void init() {
 	// Skybox
 	initSkybox();
 	createSphere(64, 64);
+	planets.clear();
+	planets.push_back({ glm::vec3(  0.0f,  0.0f,   0.0f), 5.0f });
+	planets.push_back({ glm::vec3( 20.0f,  5.0f, -30.0f), 8.0f });
+	planets.push_back({ glm::vec3(-25.0f, -4.0f, -40.0f), 6.0f });
+	planets.push_back({ glm::vec3( 35.0f, 10.0f, -60.0f), 10.0f });
+
 	planetProgramID = LoadShadersFromFile(
 	"../cloudWorld/render/box.vert",
 	"../cloudWorld/render/box.frag"
@@ -339,20 +360,27 @@ void render() {
 	// Skybox
 	drawSkybox(projectionMatrix, viewMatrix);
 
-	// One planet
+	// Procedural planets
 	glUseProgram(planetProgramID);
-	modelMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(5.0f));
-	glm::mat4 MVP = projectionMatrix * viewMatrix * modelMatrix;
 
-	glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &MVP[0][0]);
-	glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &modelMatrix[0][0]);
+	for (const Planet& p : planets) {
+		glm::vec3 wrappedPos = wrapPlanetPosition(p.position);
 
-	glBindVertexArray(sphereVAO);
-	glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+		modelMatrix =
+			glm::translate(glm::mat4(1.0f), wrappedPos) *
+			glm::scale(glm::mat4(1.0f), glm::vec3(p.radius));
+
+
+		glm::mat4 MVP = projectionMatrix * viewMatrix * modelMatrix;
+
+		glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &MVP[0][0]);
+		glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &modelMatrix[0][0]);
+
+		glBindVertexArray(sphereVAO);
+		glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+	}
 	glBindVertexArray(0);
-
 	glUseProgram(0);
-
 }
 
 void cleanup() {
