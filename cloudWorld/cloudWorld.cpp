@@ -39,7 +39,9 @@ int main() {
 		std::cerr << "Failed to init GLFW\n";
 		return -1;
 	}
-	
+
+
+
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -54,11 +56,13 @@ int main() {
 	glfwMakeContextCurrent(window);
 	glfwSetKeyCallback(window, key_callback);
 
-	// ---------- Init GLAD ----------
+	// Init GLAD
 	if (!gladLoadGL(glfwGetProcAddress)) {
 		std::cerr << "Failed to init GLAD\n";
 		return -1;
 	}
+
+	glPointSize(10.0f);
 
 	glEnable(GL_DEPTH_TEST);
 
@@ -102,6 +106,21 @@ int main() {
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		static double printTimer = 0.0;
+		printTimer += dt;
+
+		if (printTimer > 0.25) { // imprime cada 0.25s
+			std::cout << "eye = ("
+					  << eye_center.x << ", "
+					  << eye_center.y << ", "
+					  << eye_center.z << ") "
+					  << " yaw=" << yaw
+					  << " pitch=" << pitch
+					  << std::endl;
+			printTimer = 0.0;
+		}
+
 
 		glfwSwapBuffers(window);
 	}
