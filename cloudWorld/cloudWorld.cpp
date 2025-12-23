@@ -6,6 +6,8 @@
 #include <render/shader.h>
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
+#include <vector>
+#include <cstdint>
 
 static GLFWwindow* window = nullptr;
 
@@ -205,6 +207,98 @@ void drawSkybox(const glm::mat4& Perspective, const glm::mat4& View) {
 	glDepthMask(GL_TRUE);
 }
 
+struct Vertex {
+	glm::vec3 position;
+	glm::vec3 normal;
+	glm::vec2 uv;
+};
+
+GLuint sphereVAO;
+GLuint sphereVBO;
+GLuint sphereEBO;
+GLsizei sphereIndexCount = 0;
+
+void createSphere(int stacks, int slices) {
+	// Sphere formula (inspired in quiz and lighting lecture
+	// x= sin(ϕ) * cos(θ)
+	// y= cos(ϕ)
+	// z= sin(ϕ) * sin(θ)
+	// where ϕ ∈ [0,π] (stacks) and 𝜃 ∈ [0,2𝜋] θ ∈ [0,2π] (slices).
+    std::vector<Vertex> vertices;
+    std::vector<uint32_t> indices;
+
+    for (int i = 0; i <= stacks; ++i) {
+        float v = float(i) / float(stacks);
+        float phi = v * glm::pi<float>();
+
+        for (int j = 0; j <= slices; ++j) {
+            float u = float(j) / float(slices);
+            float theta = u * glm::two_pi<float>();
+
+            glm::vec3 p(
+                sin(phi) * cos(theta),
+                cos(phi),
+                sin(phi) * sin(theta)
+            );
+
+            vertices.push_back({
+                p,
+                glm::normalize(p),
+                glm::vec2(u, 1.0f - v)
+            });
+        }
+    }
+
+    for (int i = 0; i < stacks; ++i) {
+        for (int j = 0; j < slices; ++j) {
+            uint32_t a = i * (slices + 1) + j;
+            uint32_t b = (i + 1) * (slices + 1) + j;
+            uint32_t c = b + 1;
+            uint32_t d = a + 1;
+
+            indices.push_back(a);
+            indices.push_back(b);
+            indices.push_back(d);
+
+            indices.push_back(d);
+            indices.push_back(b);
+            indices.push_back(c);
+        }
+    }
+
+    sphereIndexCount = static_cast<GLsizei>(indices.size());
+
+    glGenVertexArrays(1, &sphereVAO);
+    glBindVertexArray(sphereVAO);
+
+    glGenBuffers(1, &sphereVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
+    glBufferData(GL_ARRAY_BUFFER,
+                 vertices.size() * sizeof(Vertex),
+                 vertices.data(),
+                 GL_STATIC_DRAW);
+
+    glGenBuffers(1, &sphereEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 indices.size() * sizeof(uint32_t),
+                 indices.data(),
+                 GL_STATIC_DRAW);
+
+    glEnableVertexAttribArray(0); // position
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+
+    glEnableVertexAttribArray(1); // normal
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)offsetof(Vertex, normal));
+
+    glEnableVertexAttribArray(2); // uv
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex),
+                          (void*)offsetof(Vertex, uv));
+
+    glBindVertexArray(0);
+}
+
 void init() {
 	glEnable(GL_DEPTH_TEST);
 
@@ -218,6 +312,7 @@ void init() {
 
 	// Skybox
 	initSkybox();
+	createSphere(64, 64);
 }
 
 void render() {
