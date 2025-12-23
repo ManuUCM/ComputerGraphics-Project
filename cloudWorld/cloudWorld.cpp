@@ -23,6 +23,8 @@ static glm::vec3 up(0.0f, 1.0f, 0.0f);
 static float yaw = 0.0f;    // left/right
 static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
+glm::mat4 modelMatrix;
+
 
 //For infinity camera movement
 static const float WORLD_SIZE = 200.0f;
@@ -217,6 +219,9 @@ GLuint sphereVAO;
 GLuint sphereVBO;
 GLuint sphereEBO;
 GLsizei sphereIndexCount = 0;
+GLuint planetProgramID;
+GLuint planetMatrixID;
+GLuint planetModelID;
 
 void createSphere(int stacks, int slices) {
 	// Sphere formula (inspired in quiz and lighting lecture
@@ -313,6 +318,12 @@ void init() {
 	// Skybox
 	initSkybox();
 	createSphere(64, 64);
+	planetProgramID = LoadShadersFromFile(
+	"../cloudWorld/render/box.vert",
+	"../cloudWorld/render/box.frag"
+	);
+	planetMatrixID = glGetUniformLocation(planetProgramID, "MVP");
+	planetModelID  = glGetUniformLocation(planetProgramID, "M");
 }
 
 void render() {
@@ -327,15 +338,37 @@ void render() {
 
 	// Skybox
 	drawSkybox(projectionMatrix, viewMatrix);
+
+	// One planet
+	glUseProgram(planetProgramID);
+	modelMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(5.0f));
+	glm::mat4 MVP = projectionMatrix * viewMatrix * modelMatrix;
+
+	glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &MVP[0][0]);
+	glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &modelMatrix[0][0]);
+
+	glBindVertexArray(sphereVAO);
+	glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+
+	glUseProgram(0);
+
 }
 
-void cleanupSkybox() {
+void cleanup() {
+	//Cleanup for all models
 	glDeleteVertexArrays(1, &skyboxVAO);
 	glDeleteBuffers(1, &skyboxVertexBuffer);
 	glDeleteBuffers(1, &skyboxUVBuffer);
 	glDeleteBuffers(1, &skyboxIndexBuffer);
 	glDeleteProgram(skyboxProgramID);
 	glDeleteTextures(1, &skyboxTextureID);
+
+	//planets
+	glDeleteVertexArrays(1, &sphereVAO);
+	glDeleteBuffers(1, &sphereVBO);
+	glDeleteBuffers(1, &sphereEBO);
+	glDeleteProgram(planetProgramID);
 }
 
 int main() {
@@ -421,7 +454,7 @@ int main() {
 		glfwSwapBuffers(window);
 	}
 
-	cleanupSkybox();
+	cleanup();
 	glfwTerminate();
 	return 0;
 }
