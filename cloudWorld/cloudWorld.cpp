@@ -1,20 +1,29 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
 #include <iostream>
+#include <render/shader.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb/stb_image.h>
 
 static GLFWwindow* window = nullptr;
 
 // Static Camera
+glm::mat4 viewMatrix;
+glm::mat4 projectionMatrix;
+glm::float32 FoV   = 100.0f;
+glm::float32 zNear = 0.1f;
+glm::float32 zFar  = 3500.0f;
 static glm::vec3 eye_center(0.0f, 0.0f, 10.0f);
 static glm::vec3 lookat(0.0f, 0.0f, 0.0f);
 static glm::vec3 up(0.0f, 1.0f, 0.0f);
 static float yaw = 0.0f;    // left/right
 static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
+
+//For infinity camera movement
+static const float WORLD_SIZE = 200.0f;
 
 static glm::vec3 forwardDir() {
 	return glm::normalize(glm::vec3(
@@ -28,9 +37,210 @@ static glm::vec3 rightDir() {
 	return glm::normalize(glm::cross(forwardDir(), up));
 }
 
+static float wrapFloat(float value, float period) {
+	float half = period * 0.5f;
+	value = fmod(value + half, period);
+	if (value < 0.0f) value += period;
+	return value - half;
+}
+
+static void wrapPosition(glm::vec3& p, float size) {
+	p.x = wrapFloat(p.x, size);
+	p.y = wrapFloat(p.y, size);
+	p.z = wrapFloat(p.z, size);
+}
+
 static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
 		glfwSetWindowShouldClose(w, 1);
+}
+
+// Skybox
+GLuint skyboxVAO;
+GLuint skyboxVertexBuffer;
+GLuint skyboxIndexBuffer;
+GLuint skyboxUVBuffer;
+GLuint skyboxProgramID;
+GLuint skyboxMatrixID;
+GLuint skyboxTextureID;
+
+static const GLfloat skyboxVertices[] = {
+	-1,-1, 1,  1,-1, 1,  1, 1, 1, -1, 1, 1,
+	 1,-1,-1, -1,-1,-1, -1, 1,-1,  1, 1,-1,
+	-1,-1,-1, -1,-1, 1, -1, 1, 1, -1, 1,-1,
+	 1,-1, 1,  1,-1,-1,  1, 1,-1,  1, 1, 1,
+	-1, 1, 1,  1, 1, 1,  1, 1,-1, -1, 1,-1,
+	-1,-1,-1,  1,-1,-1,  1,-1, 1, -1,-1, 1
+};
+
+GLfloat skyboxUVs[48];
+
+void adjustSkyboxUV() {
+	const float W = 1.0f / 4.0f;
+	const float H = 1.0f / 3.0f;
+	const float eps = 0.001f;
+
+	auto rect = [&](int col, int row, int idx) {
+		float u0 = col * W + eps;
+		float v0 = row * H + eps;
+		float u1 = (col + 1) * W - eps;
+		float v1 = (row + 1) * H - eps;
+
+		skyboxUVs[idx+0] = u1; skyboxUVs[idx+1] = v1;
+		skyboxUVs[idx+2] = u0; skyboxUVs[idx+3] = v1;
+		skyboxUVs[idx+4] = u0; skyboxUVs[idx+5] = v0;
+		skyboxUVs[idx+6] = u1; skyboxUVs[idx+7] = v0;
+	};
+
+	rect(1,1,  0);   // front
+	rect(3,1,  8);   // back
+	rect(2,1, 16);   // left
+	rect(0,1, 24);   // right
+	rect(1,0, 32);   // top
+	rect(1,2, 40);   // bottom
+}
+
+static const GLuint skyboxIndices[] = {
+	0, 1, 2,  0, 2, 3,
+	4, 5, 6,  4, 6, 7,
+	8, 9,10,  8,10,11,
+   12,13,14, 12,14,15,
+   16,17,18, 16,18,19,
+   20,21,22, 20,22,23
+};
+
+GLuint LoadTexture(const char* image_path) {
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+
+	int width, height, nrChannels;
+	unsigned char* data = stbi_load(image_path, &width, &height, &nrChannels, 0);
+	if (!data) {
+		printf("Failed to load texture: %s\n", image_path);
+		return 0;
+	}
+
+	GLenum format = GL_RGB;
+	if (nrChannels == 1) format = GL_RED;
+	else if (nrChannels == 3) format = GL_RGB;
+	else if (nrChannels == 4) format = GL_RGBA;
+
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexImage2D(
+		GL_TEXTURE_2D,
+		0,
+		format,
+		width,
+		height,
+		0,
+		format,
+		GL_UNSIGNED_BYTE,
+		data
+	);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+	stbi_image_free(data);
+	return textureID;
+}
+
+void initSkybox() {
+	adjustSkyboxUV();
+
+	glGenVertexArrays(1, &skyboxVAO);
+	glBindVertexArray(skyboxVAO);
+
+	glGenBuffers(1, &skyboxVertexBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, skyboxVertexBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxVertices), skyboxVertices, GL_STATIC_DRAW);
+
+	glGenBuffers(1, &skyboxUVBuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, skyboxUVBuffer);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(skyboxUVs), skyboxUVs, GL_STATIC_DRAW);
+
+	glGenBuffers(1, &skyboxIndexBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, skyboxIndexBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(skyboxIndices), skyboxIndices, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, skyboxVertexBuffer);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+	glEnableVertexAttribArray(2);
+	glBindBuffer(GL_ARRAY_BUFFER, skyboxUVBuffer);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
+
+	glBindVertexArray(0);
+
+	skyboxProgramID = LoadShadersFromFile(
+		"../cloudWorld/render/skybox.vert",
+		"../cloudWorld/render/skybox.frag"
+	);
+
+	skyboxMatrixID = glGetUniformLocation(skyboxProgramID, "MVP");
+	skyboxTextureID = LoadTexture("../cloudWorld/assets/skybox/NebulaAtlas.png");
+}
+
+void drawSkybox(const glm::mat4& Perspective, const glm::mat4& View) {
+	glDepthMask(GL_FALSE);
+	glUseProgram(skyboxProgramID);
+
+	glm::mat4 ViewNoTranslation = glm::mat4(glm::mat3(View));
+	glm::mat4 skyboxMVP = Perspective * ViewNoTranslation * glm::mat4(1.0f);
+
+	glUniformMatrix4fv(skyboxMatrixID, 1, GL_FALSE, &skyboxMVP[0][0]);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, skyboxTextureID);
+
+	glBindVertexArray(skyboxVAO);
+	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+
+	glUseProgram(0);
+	glDepthMask(GL_TRUE);
+}
+
+void init() {
+	glEnable(GL_DEPTH_TEST);
+
+	// Projection matrix
+	projectionMatrix = glm::perspective(
+		glm::radians(FoV),
+		4.0f / 3.0f,
+		zNear,
+		zFar
+	);
+
+	// Skybox
+	initSkybox();
+}
+
+void render() {
+	// Update view matrix
+	viewMatrix = glm::lookAt(
+		eye_center,
+		lookat,
+		up
+	);
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	// Skybox
+	drawSkybox(projectionMatrix, viewMatrix);
+}
+
+void cleanupSkybox() {
+	glDeleteVertexArrays(1, &skyboxVAO);
+	glDeleteBuffers(1, &skyboxVertexBuffer);
+	glDeleteBuffers(1, &skyboxUVBuffer);
+	glDeleteBuffers(1, &skyboxIndexBuffer);
+	glDeleteProgram(skyboxProgramID);
+	glDeleteTextures(1, &skyboxTextureID);
 }
 
 int main() {
@@ -39,8 +249,6 @@ int main() {
 		std::cerr << "Failed to init GLFW\n";
 		return -1;
 	}
-
-
 
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
@@ -65,6 +273,8 @@ int main() {
 	glPointSize(10.0f);
 
 	glEnable(GL_DEPTH_TEST);
+
+	init();
 
 	double lastTime = glfwGetTime();
 
@@ -94,6 +304,9 @@ int main() {
 		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) eye_center += up  * speed * dt;
 		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) eye_center -= up  * speed * dt;
 
+		// Limit exploration - infinity illusion
+		wrapPosition(eye_center, WORLD_SIZE);
+
 		int w, h;
 		glfwGetFramebufferSize(window, &w, &h);
 		glViewport(0, 0, w, h);
@@ -107,24 +320,13 @@ int main() {
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		static double printTimer = 0.0;
-		printTimer += dt;
-
-		if (printTimer > 0.25) { // imprime cada 0.25s
-			std::cout << "eye = ("
-					  << eye_center.x << ", "
-					  << eye_center.y << ", "
-					  << eye_center.z << ") "
-					  << " yaw=" << yaw
-					  << " pitch=" << pitch
-					  << std::endl;
-			printTimer = 0.0;
-		}
-
+		lookat = eye_center + forwardDir();
+		render();
 
 		glfwSwapBuffers(window);
 	}
 
+	cleanupSkybox();
 	glfwTerminate();
 	return 0;
 }
