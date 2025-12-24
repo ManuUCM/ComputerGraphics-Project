@@ -46,5 +46,13 @@ void main(){
 	vec3 albedo = texture(diffuseTexture, UV).rgb;
 	vec3 color = albedo * (ambient + diffuse);
 
+	// --- Tone mapping (Reinhard) ---
+	// C_out = C / (C + 1)
+	color = color / (color + vec3(1.0));
+
+	// --- Gamma correction ---
+	// Convert from linear space to sRGB
+	color = pow(color, vec3(1.0 / 2.2));
+
 	finalColor = color;
 }

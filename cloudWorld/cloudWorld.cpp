@@ -387,7 +387,7 @@ void render() {
 	glUseProgram(planetProgramID);
 	// Environment lighting
 	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
-			0.25f, 0.30f, 0.40f);
+			0.4f, 0.55f, 0.65f);
 
 	for (const Planet& p : planets) {
 		glActiveTexture(GL_TEXTURE0);
