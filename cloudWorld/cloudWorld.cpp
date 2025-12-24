@@ -362,6 +362,10 @@ void render() {
 
 	// Procedural planets
 	glUseProgram(planetProgramID);
+	// Environment lighting
+	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
+			0.25f, 0.30f, 0.40f);
+
 
 	for (const Planet& p : planets) {
 		glm::vec3 wrappedPos = wrapPlanetPosition(p.position);
