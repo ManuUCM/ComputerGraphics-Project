@@ -8,6 +8,7 @@
 #include <stb/stb_image.h>
 #include <vector>
 #include <cstdint>
+#include <cstdlib>
 
 static GLFWwindow* window = nullptr;
 
@@ -230,10 +231,15 @@ GLsizei sphereIndexCount = 0;
 GLuint planetProgramID;
 GLuint planetMatrixID;
 GLuint planetModelID;
+//Textures
+static const int NUM_PLANET_TEXTURES = 7;
+GLuint planetTextures[NUM_PLANET_TEXTURES];
+GLuint planetTextureSampler;
 
 struct Planet {
 	glm::vec3 position;
 	float radius;
+	int textureIndex;
 };
 
 std::vector<Planet> planets;
@@ -334,15 +340,32 @@ void init() {
 	initSkybox();
 	createSphere(64, 64);
 	planets.clear();
-	planets.push_back({ glm::vec3(  0.0f,  0.0f,   0.0f), 5.0f });
-	planets.push_back({ glm::vec3( 20.0f,  5.0f, -30.0f), 8.0f });
-	planets.push_back({ glm::vec3(-25.0f, -4.0f, -40.0f), 6.0f });
-	planets.push_back({ glm::vec3( 35.0f, 10.0f, -60.0f), 10.0f });
+	for (int i = 0; i < 20; ++i) {
+		Planet p;
+		p.position = glm::vec3(
+			(rand() % 200) - 100,
+			(rand() % 80)  - 40,
+			-(rand() % 300)
+		);
+		p.radius = 4.0f + float(rand() % 8);
+		p.textureIndex = rand() % NUM_PLANET_TEXTURES;
+
+		planets.push_back(p);
+	}
 
 	planetProgramID = LoadShadersFromFile(
 	"../cloudWorld/render/box.vert",
 	"../cloudWorld/render/box.frag"
 	);
+	planetTextures[0] = LoadTexture("assets/textures/planet0.jpg");
+	planetTextures[1] = LoadTexture("assets/textures/planet1.jpg");
+	planetTextures[2] = LoadTexture("assets/textures/planet2.jpg");
+	planetTextures[3] = LoadTexture("assets/textures/planet3.jpg");
+	planetTextures[4] = LoadTexture("assets/textures/planet4.jpg");
+	planetTextures[5] = LoadTexture("assets/textures/planet5.jpg");
+	planetTextures[6] = LoadTexture("assets/textures/planet6.jpg");
+
+	planetTextureSampler = glGetUniformLocation(planetProgramID, "diffuseTexture");
 	planetMatrixID = glGetUniformLocation(planetProgramID, "MVP");
 	planetModelID  = glGetUniformLocation(planetProgramID, "M");
 }
@@ -365,6 +388,11 @@ void render() {
 	// Environment lighting
 	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
 			0.25f, 0.30f, 0.40f);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D,
+				  planetTextures[p.textureIndex]);
+	glUniform1i(planetTextureSampler, 0);
 
 
 	for (const Planet& p : planets) {
@@ -401,6 +429,7 @@ void cleanup() {
 	glDeleteBuffers(1, &sphereVBO);
 	glDeleteBuffers(1, &sphereEBO);
 	glDeleteProgram(planetProgramID);
+	glDeleteTextures(NUM_PLANET_TEXTURES, planetTextures);
 }
 
 int main() {
