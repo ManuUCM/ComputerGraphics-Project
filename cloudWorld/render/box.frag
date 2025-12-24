@@ -6,6 +6,7 @@ out vec3 finalColor;
 uniform vec3 lightDir;
 uniform vec3 lightColor;
 uniform vec3 envColor;
+uniform sampler2D diffuseTexture;
 
 void main(){
 	// Normalize the surface normal
@@ -42,7 +43,7 @@ void main(){
 	//   L_total = albedo * (L_ambient + L_diffuse)
 	// This keeps the Lambertian model intact while improving
 	// it with global illumination from the environment.
-	vec3 albedo = vec3(0.7, 0.7, 0.8);
+	vec3 albedo = texture(diffuseTexture, UV).rgb;
 	vec3 color = albedo * (ambient + diffuse);
 
 	finalColor = color;
