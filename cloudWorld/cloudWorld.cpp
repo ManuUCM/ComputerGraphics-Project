@@ -357,13 +357,13 @@ void init() {
 	"../cloudWorld/render/box.vert",
 	"../cloudWorld/render/box.frag"
 	);
-	planetTextures[0] = LoadTexture("assets/textures/planet0.jpg");
-	planetTextures[1] = LoadTexture("assets/textures/planet1.jpg");
-	planetTextures[2] = LoadTexture("assets/textures/planet2.jpg");
-	planetTextures[3] = LoadTexture("assets/textures/planet3.jpg");
-	planetTextures[4] = LoadTexture("assets/textures/planet4.jpg");
-	planetTextures[5] = LoadTexture("assets/textures/planet5.jpg");
-	planetTextures[6] = LoadTexture("assets/textures/planet6.jpg");
+	planetTextures[0] = LoadTexture("../cloudWorld/assets/textures/aerialRock.jpg");
+	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/aerialMud.jpg");
+	planetTextures[2] = LoadTexture("../cloudWorld/assets/textures/aerialBeach.jpg");
+	planetTextures[3] = LoadTexture("../cloudWorld/assets/textures/lichenRock.jpg");
+	planetTextures[4] = LoadTexture("../cloudWorld/assets/textures/rockBoulderDry.jpg");
+	planetTextures[5] = LoadTexture("../cloudWorld/assets/textures/slateFloor.jpg");
+	planetTextures[6] = LoadTexture("../cloudWorld/assets/textures/snowField.jpg");
 
 	planetTextureSampler = glGetUniformLocation(planetProgramID, "diffuseTexture");
 	planetMatrixID = glGetUniformLocation(planetProgramID, "MVP");
@@ -388,7 +388,7 @@ void render() {
 	// Environment lighting
 	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
 			0.25f, 0.30f, 0.40f);
-	
+
 	for (const Planet& p : planets) {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D,
