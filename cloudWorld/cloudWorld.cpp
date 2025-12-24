@@ -388,20 +388,18 @@ void render() {
 	// Environment lighting
 	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
 			0.25f, 0.30f, 0.40f);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D,
-				  planetTextures[p.textureIndex]);
-	glUniform1i(planetTextureSampler, 0);
-
-
+	
 	for (const Planet& p : planets) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D,
+					  planetTextures[p.textureIndex]);
+		glUniform1i(planetTextureSampler, 0);
+
 		glm::vec3 wrappedPos = wrapPlanetPosition(p.position);
 
 		modelMatrix =
 			glm::translate(glm::mat4(1.0f), wrappedPos) *
 			glm::scale(glm::mat4(1.0f), glm::vec3(p.radius));
-
 
 		glm::mat4 MVP = projectionMatrix * viewMatrix * modelMatrix;
 
