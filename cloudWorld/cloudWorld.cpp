@@ -24,6 +24,7 @@ static glm::vec3 up(0.0f, 1.0f, 0.0f);
 static float yaw = 0.0f;    // left/right
 static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
+static float speedBoost = 2.5f;
 glm::mat4 modelMatrix;
 
 
@@ -247,7 +248,7 @@ GLuint planetModelID;
 //Planet creation and positions
 static const int NUM_PLANETS = 14;
 static const float PLANET_FIELD_RADIUS = 220.0f;
-static const float MIN_PLANET_DISTANCE = 30.0f;
+static const float MIN_PLANET_DISTANCE = 80.0f;
 //Textures
 static const int NUM_PLANET_TEXTURES = 17;
 GLuint planetTextures[NUM_PLANET_TEXTURES];
@@ -365,11 +366,14 @@ void init() {
 
 		while (!valid) { // This time randomly placed planets need to respect minimal distances between other already created planets
 			p.position = randomInSphere(PLANET_FIELD_RADIUS);
-			p.radius = 4.0f + float(rand() % 6);
+			float t = float(rand()) / RAND_MAX;   // [0,1]
+			p.radius = 2.5f + t * t * 10.0f;       // small planets common, big ones rare
 			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
 
 			valid = true;
 			for (const Planet& other : planets) {
+				// float minDist = (p.radius + other.radius) * 1.6f;
+				// alternative if it still doesn't work with higher distance
 				float minDist = p.radius + other.radius + MIN_PLANET_DISTANCE;
 				if (glm::distance(p.position, other.position) < minDist) {
 					valid = false;
@@ -509,11 +513,17 @@ int main() {
 	while (!glfwWindowShouldClose(window)) {
 		double now = glfwGetTime();
 		float dt = float(now - lastTime);
-		lastTime = now;
 
+		// Shift key to increase speed if exploration is too slow
+		float currentSpeed = speed;
+		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
+			currentSpeed *= speedBoost;
+
+		lastTime = now;
 		glfwPollEvents();
 
 		// Rotation
+		// Camera rotation with left, right, up and down key arrows
 		if (glfwGetKey(window, GLFW_KEY_LEFT)  == GLFW_PRESS) yaw   -= 1.5f * dt;
 		if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) yaw   += 1.5f * dt;
 		if (glfwGetKey(window, GLFW_KEY_UP)    == GLFW_PRESS) pitch += 1.0f * dt;
@@ -524,12 +534,14 @@ int main() {
 		glm::vec3 fwd = forwardDir();
 		glm::vec3 rgt = rightDir();
 
-		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) eye_center += fwd * speed * dt;
-		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) eye_center -= fwd * speed * dt;
-		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) eye_center -= rgt * speed * dt;
-		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) eye_center += rgt * speed * dt;
-		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) eye_center += up  * speed * dt;
-		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) eye_center -= up  * speed * dt;
+		// Positional movement with WASD for forward, backward, left and right
+		// QE for up and down respectively
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) eye_center += fwd * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) eye_center -= fwd * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) eye_center -= rgt * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) eye_center += rgt * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) eye_center += up  * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) eye_center -= up  * currentSpeed * dt;
 
 		// Limit exploration - infinity illusion
 		wrapPosition(eye_center, WORLD_SIZE);
