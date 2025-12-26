@@ -20,6 +20,8 @@ include_directories(
 add_executable(cloudWorld
 	cloudWorld/cloudWorld.cpp
 	cloudWorld/render/shader.cpp
+		cloudWorld/include/bot.h
+		cloudWorld/src/bot.cpp
 )
 target_link_libraries(cloudWorld
 	${OPENGL_LIBRARY}

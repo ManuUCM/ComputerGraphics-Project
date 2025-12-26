@@ -4,11 +4,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <iostream>
 #include <render/shader.h>
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb/stb_image.h>
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+#include "include/bot.h"
 
 static GLFWwindow* window = nullptr;
 
@@ -26,61 +26,6 @@ static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
 static float speedBoost = 2.5f;
 glm::mat4 modelMatrix;
-
-
-//For infinity camera movement
-static const float WORLD_SIZE = 200.0f;
-
-static glm::vec3 forwardDir() {
-	return glm::normalize(glm::vec3(
-		cos(pitch) * sin(yaw),
-		sin(pitch),
-	   -cos(pitch) * cos(yaw)
-	));
-}
-
-static glm::vec3 rightDir() {
-	return glm::normalize(glm::cross(forwardDir(), up));
-}
-
-static float wrapFloat(float value, float period) {
-	float half = period * 0.5f;
-	value = fmod(value + half, period);
-	if (value < 0.0f) value += period;
-	return value - half;
-}
-
-static void wrapPosition(glm::vec3& p, float size) {
-	p.x = wrapFloat(p.x, size);
-	p.y = wrapFloat(p.y, size);
-	p.z = wrapFloat(p.z, size);
-}
-
-glm::vec3 wrapPlanetPosition(const glm::vec3& planetPos) {
-	glm::vec3 p = planetPos;
-	p.x = wrapFloat(p.x - eye_center.x, WORLD_SIZE) + eye_center.x;
-	p.y = wrapFloat(p.y - eye_center.y, WORLD_SIZE) + eye_center.y;
-	p.z = wrapFloat(p.z - eye_center.z, WORLD_SIZE) + eye_center.z;
-	return p;
-}
-
-glm::vec3 randomInSphere(float radius) {
-	glm::vec3 p;
-	do {
-		p = glm::vec3(
-			(float(rand()) / RAND_MAX) * 2.0f - 1.0f,
-			(float(rand()) / RAND_MAX) * 2.0f - 1.0f,
-			(float(rand()) / RAND_MAX) * 2.0f - 1.0f
-		);
-	} while (glm::length(p) > 1.0f);
-
-	return p * radius;
-}
-
-static void key_callback(GLFWwindow* w, int key, int, int action, int) {
-	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
-		glfwSetWindowShouldClose(w, 1);
-}
 
 // Skybox
 GLuint skyboxVAO;
@@ -232,6 +177,35 @@ void drawSkybox(const glm::mat4& Perspective, const glm::mat4& View) {
 	glDepthMask(GL_TRUE);
 }
 
+//For infinity camera movement
+static const float WORLD_SIZE = 200.0f;
+
+static glm::vec3 forwardDir() {
+	return glm::normalize(glm::vec3(
+		cos(pitch) * sin(yaw),
+		sin(pitch),
+	   -cos(pitch) * cos(yaw)
+	));
+}
+
+static glm::vec3 rightDir() {
+	return glm::normalize(glm::cross(forwardDir(), up));
+}
+
+static float wrapFloat(float value, float period) {
+	float half = period * 0.5f;
+	value = fmod(value + half, period);
+	if (value < 0.0f) value += period;
+	return value - half;
+}
+
+static void wrapPosition(glm::vec3& p, float size) {
+	p.x = wrapFloat(p.x, size);
+	p.y = wrapFloat(p.y, size);
+	p.z = wrapFloat(p.z, size);
+}
+
+
 struct Vertex {
 	glm::vec3 position;
 	glm::vec3 normal;
@@ -253,6 +227,11 @@ static const float MIN_PLANET_DISTANCE = 80.0f;
 static const int NUM_PLANET_TEXTURES = 17;
 GLuint planetTextures[NUM_PLANET_TEXTURES];
 GLuint planetTextureSampler;
+// Better spawn and despawn for procedural planets
+static const float SPAWN_RADIUS   = 260.0f;
+static const float DESPAWN_RADIUS = 300.0f;
+static const int   MAX_PLANETS    = 14;
+glm::vec3 lastSpawnCenter;
 
 struct Planet {
 	glm::vec3 position;
@@ -261,6 +240,27 @@ struct Planet {
 };
 
 std::vector<Planet> planets;
+
+glm::vec3 wrapPlanetPosition(const glm::vec3& planetPos) {
+	glm::vec3 p = planetPos;
+	p.x = wrapFloat(p.x - eye_center.x, WORLD_SIZE) + eye_center.x;
+	p.y = wrapFloat(p.y - eye_center.y, WORLD_SIZE) + eye_center.y;
+	p.z = wrapFloat(p.z - eye_center.z, WORLD_SIZE) + eye_center.z;
+	return p;
+}
+
+glm::vec3 randomInSphere(float radius) {
+	glm::vec3 p;
+	do {
+		p = glm::vec3(
+			(float(rand()) / RAND_MAX) * 2.0f - 1.0f,
+			(float(rand()) / RAND_MAX) * 2.0f - 1.0f,
+			(float(rand()) / RAND_MAX) * 2.0f - 1.0f
+		);
+	} while (glm::length(p) > 1.0f);
+
+	return p * radius;
+}
 
 void createSphere(int stacks, int slices) {
 	// Sphere formula (inspired in quiz and lighting lecture
@@ -343,6 +343,14 @@ void createSphere(int stacks, int slices) {
     glBindVertexArray(0);
 }
 
+MyBot bot;
+
+int humanoidPlanetIndex = 0;
+float humanoidAngle = 0.0f;
+float humanoidAngularSpeed = 0.8f;
+float humanoidRunRadiusFactor = 1.15f;
+
+
 void init() {
 	glEnable(GL_DEPTH_TEST);
 
@@ -410,6 +418,12 @@ void init() {
 	planetTextureSampler = glGetUniformLocation(planetProgramID, "diffuseTexture");
 	planetMatrixID = glGetUniformLocation(planetProgramID, "MVP");
 	planetModelID  = glGetUniformLocation(planetProgramID, "M");
+
+	// humanoid init
+	bot.initialize();
+	humanoidPlanetIndex = rand() % planets.size();
+	humanoidAngle = 0.0f;
+
 }
 
 void render() {
@@ -453,6 +467,29 @@ void render() {
 	}
 	glBindVertexArray(0);
 	glUseProgram(0);
+
+	//humanoid rendering
+	const Planet& hp = planets[humanoidPlanetIndex];
+
+	// Surface normal for mini-radius run
+	glm::vec3 surfaceNormal = glm::normalize(glm::vec3(cos(humanoidAngle), 0.3f, sin(humanoidAngle)));
+
+	glm::vec3 humanoidPos = hp.position + surfaceNormal * (hp.radius * humanoidRunRadiusFactor);
+
+	// Build model matrix
+	glm::mat4 humanoidModel = glm::translate(glm::mat4(1.0f), humanoidPos);
+
+	// Scale relative to planet size
+	float humanoidScale = hp.radius * 0.12f;
+	humanoidModel = glm::scale(humanoidModel, glm::vec3(humanoidScale));
+
+	// Face running direction
+	glm::vec3 tangentDir = glm::normalize(glm::cross(surfaceNormal, glm::vec3(0,1,0)));
+	float yaw = atan2(tangentDir.x, tangentDir.z);
+	humanoidModel = glm::rotate(humanoidModel, yaw, glm::vec3(0,1,0));
+
+	glm::mat4 vp = projectionMatrix * viewMatrix;
+	bot.render(vp * humanoidModel);
 }
 
 void cleanup() {
@@ -472,6 +509,14 @@ void cleanup() {
 	glDeleteBuffers(1, &sphereEBO);
 	glDeleteProgram(planetProgramID);
 	glDeleteTextures(NUM_PLANET_TEXTURES, planetTextures);
+
+	//humanoid
+	bot.cleanup();
+}
+
+static void key_callback(GLFWwindow* w, int key, int, int action, int) {
+	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
+		glfwSetWindowShouldClose(w, 1);
 }
 
 int main() {
@@ -513,6 +558,9 @@ int main() {
 	while (!glfwWindowShouldClose(window)) {
 		double now = glfwGetTime();
 		float dt = float(now - lastTime);
+
+		humanoidAngle += humanoidAngularSpeed * dt;
+		bot.update(dt * playbackSpeed);
 
 		// Shift key to increase speed if exploration is too slow
 		float currentSpeed = speed;
