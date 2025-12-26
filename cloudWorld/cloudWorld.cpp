@@ -246,10 +246,10 @@ GLuint planetMatrixID;
 GLuint planetModelID;
 //Planet creation and positions
 static const int NUM_PLANETS = 14;
-static const float PLANET_FIELD_RADIUS = 120.0f;
-static const float MIN_PLANET_DISTANCE = 18.0f;
+static const float PLANET_FIELD_RADIUS = 220.0f;
+static const float MIN_PLANET_DISTANCE = 30.0f;
 //Textures
-static const int NUM_PLANET_TEXTURES = 7;
+static const int NUM_PLANET_TEXTURES = 17;
 GLuint planetTextures[NUM_PLANET_TEXTURES];
 GLuint planetTextureSampler;
 
@@ -365,7 +365,7 @@ void init() {
 
 		while (!valid) { // This time randomly placed planets need to respect minimal distances between other already created planets
 			p.position = randomInSphere(PLANET_FIELD_RADIUS);
-			p.radius = 4.0f + float(rand() % 8);
+			p.radius = 4.0f + float(rand() % 6);
 			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
 
 			valid = true;
@@ -387,11 +387,21 @@ void init() {
 	);
 	planetTextures[0] = LoadTexture("../cloudWorld/assets/textures/aerialRock.jpg");
 	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/aerialMud.jpg");
-	planetTextures[2] = LoadTexture("../cloudWorld/assets/textures/aerialBeach.jpg");
+	planetTextures[2] = LoadTexture("../cloudWorld/assets/textures/jerseyMelange.jpg");
 	planetTextures[3] = LoadTexture("../cloudWorld/assets/textures/lichenRock.jpg");
 	planetTextures[4] = LoadTexture("../cloudWorld/assets/textures/rockBoulderDry.jpg");
 	planetTextures[5] = LoadTexture("../cloudWorld/assets/textures/slateFloor.jpg");
 	planetTextures[6] = LoadTexture("../cloudWorld/assets/textures/snowField.jpg");
+	planetTextures[7] = LoadTexture("../cloudWorld/assets/textures/barkWillow.jpg");
+	planetTextures[8] = LoadTexture("../cloudWorld/assets/textures/barkWillow2.jpg");
+	planetTextures[9] = LoadTexture("../cloudWorld/assets/textures/crepeSatin.jpg");
+	planetTextures[10] = LoadTexture("../cloudWorld/assets/textures/gangesRiverPebbles.jpg");
+	planetTextures[11] = LoadTexture("../cloudWorld/assets/textures/gravel.jpg");
+	planetTextures[12] = LoadTexture("../cloudWorld/assets/textures/rockBump.jpg");
+	planetTextures[13] = LoadTexture("../cloudWorld/assets/textures/rockPitted.jpg");
+	planetTextures[14] = LoadTexture("../cloudWorld/assets/textures/roughLinen.jpg");
+	planetTextures[15] = LoadTexture("../cloudWorld/assets/textures/terryCloth.jpg");
+	planetTextures[16] = LoadTexture("../cloudWorld/assets/textures/velourVelvet.jpg");
 
 	planetTextureSampler = glGetUniformLocation(planetProgramID, "diffuseTexture");
 	planetMatrixID = glGetUniformLocation(planetProgramID, "MVP");
@@ -443,6 +453,8 @@ void render() {
 
 void cleanup() {
 	//Cleanup for all models
+
+	// Skybox
 	glDeleteVertexArrays(1, &skyboxVAO);
 	glDeleteBuffers(1, &skyboxVertexBuffer);
 	glDeleteBuffers(1, &skyboxUVBuffer);
