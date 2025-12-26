@@ -63,6 +63,19 @@ glm::vec3 wrapPlanetPosition(const glm::vec3& planetPos) {
 	return p;
 }
 
+glm::vec3 randomInSphere(float radius) {
+	glm::vec3 p;
+	do {
+		p = glm::vec3(
+			(float(rand()) / RAND_MAX) * 2.0f - 1.0f,
+			(float(rand()) / RAND_MAX) * 2.0f - 1.0f,
+			(float(rand()) / RAND_MAX) * 2.0f - 1.0f
+		);
+	} while (glm::length(p) > 1.0f);
+
+	return p * radius;
+}
+
 static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
 		glfwSetWindowShouldClose(w, 1);
@@ -231,6 +244,10 @@ GLsizei sphereIndexCount = 0;
 GLuint planetProgramID;
 GLuint planetMatrixID;
 GLuint planetModelID;
+//Planet creation and positions
+static const int NUM_PLANETS = 14;
+static const float PLANET_FIELD_RADIUS = 120.0f;
+static const float MIN_PLANET_DISTANCE = 18.0f;
 //Textures
 static const int NUM_PLANET_TEXTURES = 7;
 GLuint planetTextures[NUM_PLANET_TEXTURES];
@@ -340,15 +357,26 @@ void init() {
 	initSkybox();
 	createSphere(64, 64);
 	planets.clear();
-	for (int i = 0; i < 20; ++i) {
+	srand(42);
+
+	for (int i = 0; i < NUM_PLANETS; ++i) {
 		Planet p;
-		p.position = glm::vec3(
-			(rand() % 200) - 100,
-			(rand() % 80)  - 40,
-			-(rand() % 300)
-		);
-		p.radius = 4.0f + float(rand() % 8);
-		p.textureIndex = rand() % NUM_PLANET_TEXTURES;
+		bool valid = false;
+
+		while (!valid) { // This time randomly placed planets need to respect minimal distances between other already created planets
+			p.position = randomInSphere(PLANET_FIELD_RADIUS);
+			p.radius = 4.0f + float(rand() % 8);
+			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
+
+			valid = true;
+			for (const Planet& other : planets) {
+				float minDist = p.radius + other.radius + MIN_PLANET_DISTANCE;
+				if (glm::distance(p.position, other.position) < minDist) {
+					valid = false;
+					break;
+				}
+			}
+		}
 
 		planets.push_back(p);
 	}
