@@ -15,6 +15,7 @@ static GLFWwindow* window = nullptr;
 // Static Camera
 glm::mat4 viewMatrix;
 glm::mat4 projectionMatrix;
+glm::mat4 modelMatrix;
 glm::float32 FoV   = 100.0f;
 glm::float32 zNear = 0.1f;
 glm::float32 zFar  = 3500.0f;
@@ -25,7 +26,6 @@ static float yaw = 0.0f;    // left/right
 static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
 static float speedBoost = 2.5f;
-glm::mat4 modelMatrix;
 
 // Skybox
 GLuint skyboxVAO;
@@ -216,6 +216,7 @@ GLuint sphereVAO;
 GLuint sphereVBO;
 GLuint sphereEBO;
 GLsizei sphereIndexCount = 0;
+
 GLuint planetProgramID;
 GLuint planetMatrixID;
 GLuint planetModelID;
@@ -345,11 +346,11 @@ void createSphere(int stacks, int slices) {
 
 MyBot bot;
 
-int humanoidPlanetIndex = 0;
+int humanoidPlanetIndex = -1;
 float humanoidAngle = 0.0f;
-float humanoidAngularSpeed = 0.8f;
-float humanoidRunRadiusFactor = 1.15f;
-
+float humanoidAngularSpeed = 0.0f;
+float humanoidRunRadiusFactor = 1.10f;
+static float botAnimTime = 0.0f;
 
 void init() {
 	glEnable(GL_DEPTH_TEST);
@@ -377,7 +378,6 @@ void init() {
 			float t = float(rand()) / RAND_MAX;   // [0,1]
 			p.radius = 2.5f + t * t * 10.0f;       // small planets common, big ones rare
 			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
-
 			valid = true;
 			for (const Planet& other : planets) {
 				// float minDist = (p.radius + other.radius) * 1.6f;
@@ -389,7 +389,6 @@ void init() {
 				}
 			}
 		}
-
 		planets.push_back(p);
 	}
 
@@ -421,7 +420,9 @@ void init() {
 
 	// humanoid init
 	bot.initialize();
-	humanoidPlanetIndex = rand() % planets.size();
+	if (humanoidPlanetIndex < 0 && !planets.empty()) {
+		humanoidPlanetIndex = rand() % planets.size();
+	}
 	humanoidAngle = 0.0f;
 
 }
@@ -471,25 +472,57 @@ void render() {
 	//humanoid rendering
 	const Planet& hp = planets[humanoidPlanetIndex];
 
-	// Surface normal for mini-radius run
-	glm::vec3 surfaceNormal = glm::normalize(glm::vec3(cos(humanoidAngle), 0.3f, sin(humanoidAngle)));
+	float theta = humanoidAngle;
+	float phi = glm::radians(15.0f);
 
-	glm::vec3 humanoidPos = hp.position + surfaceNormal * (hp.radius * humanoidRunRadiusFactor);
+	// planet model matrix (same as the one used to draw the planets)
+	glm::vec3 wrappedPos = wrapPlanetPosition(hp.position);
+	glm::mat4 planetModel = glm::translate(glm::mat4(1.0f), wrappedPos);
 
-	// Build model matrix
-	glm::mat4 humanoidModel = glm::translate(glm::mat4(1.0f), humanoidPos);
+	glm::vec3 localSurfacePos(
+		cos(theta) * sin(phi),
+		cos(phi),
+		sin(theta) * sin(phi)
+	);
 
-	// Scale relative to planet size
+	glm::vec3 markerPos = wrappedPos + localSurfacePos * (hp.radius * humanoidRunRadiusFactor);
+
+	glm::mat4 markerModel =
+		glm::translate(glm::mat4(1.0f), markerPos) *
+		glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));   // small marker
+
+	glm::mat4 markerMVP = projectionMatrix * viewMatrix * markerModel;
+
+	glUseProgram(planetProgramID);
+	glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &markerMVP[0][0]);
+	glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &markerModel[0][0]);
+	glBindVertexArray(sphereVAO);
+	glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+	glBindVertexArray(0);
+	glUseProgram(0);
+
+	// humanoid local transform (relative to planet)
+	glm::mat4 humanoidLocal = glm::translate(
+	glm::mat4(1.0f),
+	localSurfacePos * (hp.radius * humanoidRunRadiusFactor)
+	);
+
+	// scale humanoid relative to planet
 	float humanoidScale = hp.radius * 0.12f;
-	humanoidModel = glm::scale(humanoidModel, glm::vec3(humanoidScale));
+	humanoidLocal = humanoidLocal * glm::scale(glm::mat4(1.0f),
+		glm::vec3(humanoidScale)
+	);
 
-	// Face running direction
-	glm::vec3 tangentDir = glm::normalize(glm::cross(surfaceNormal, glm::vec3(0,1,0)));
-	float yaw = atan2(tangentDir.x, tangentDir.z);
-	humanoidModel = glm::rotate(humanoidModel, yaw, glm::vec3(0,1,0));
+	// orientation
+	glm::vec3 normal = glm::normalize(localSurfacePos);
+	glm::vec3 tangent = glm::normalize(glm::cross(normal, glm::vec3(0,1,0)));
+	float yaw = atan2(-tangent.z, tangent.x);
+	humanoidLocal = humanoidLocal * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0,1,0));
 
-	glm::mat4 vp = projectionMatrix * viewMatrix;
-	bot.render(vp * humanoidModel);
+	// FINAL model matrix
+	glm::mat4 humanoidModel = planetModel * humanoidLocal;
+
+	bot.render(projectionMatrix * viewMatrix * humanoidModel, humanoidModel);
 }
 
 void cleanup() {
@@ -560,7 +593,8 @@ int main() {
 		float dt = float(now - lastTime);
 
 		humanoidAngle += humanoidAngularSpeed * dt;
-		bot.update(dt * playbackSpeed);
+		botAnimTime += dt * playbackSpeed;
+		bot.update(botAnimTime);
 
 		// Shift key to increase speed if exploration is too slow
 		float currentSpeed = speed;

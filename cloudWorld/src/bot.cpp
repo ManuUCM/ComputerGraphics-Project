@@ -374,6 +374,7 @@ void MyBot::initialize() {
 	// Retrieve the uniform ID for the joint matrix array
 	// I need the ID for the skinning To-Do in render() -> "Set animation data for linear blend skinning in shader"
 	jointMatricesID = glGetUniformLocation(programID, "jointMatrices");
+	modelMatrixID = glGetUniformLocation(programID, "M");
 	std::cout << "Debug: jointMatricesID = " << jointMatricesID << std::endl;
 }
 
@@ -539,12 +540,13 @@ void MyBot::drawModel(const std::vector<PrimitiveObject>& primitiveObjects, tiny
 	}
 }
 
-void MyBot::render(glm::mat4 cameraMatrix) {
+void MyBot::render(glm::mat4 cameraMatrix, const glm::mat4& M) {
 	glUseProgram(programID);
 
 	// Set camera
 	glm::mat4 mvp = cameraMatrix;
 	glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &mvp[0][0]);
+	glUniformMatrix4fv(modelMatrixID, 1, GL_FALSE, glm::value_ptr(M));
 
 	// -----------------------------------------------------------------
 	// TODO: Set animation data for linear blend skinning in shader

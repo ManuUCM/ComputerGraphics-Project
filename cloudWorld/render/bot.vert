@@ -13,6 +13,7 @@ out vec3 worldPosition;
 out vec3 worldNormal;
 
 uniform mat4 MVP;
+uniform mat4 M;
 uniform mat4 jointMatrices[100]; // Max joints
 
 void main() {
@@ -27,8 +28,10 @@ void main() {
 
     vec4 skinnedPosition = skinMatrix * vec4(vertexPosition, 1.0);
 
-    // Transform vertex
-    gl_Position =  MVP * skinnedPosition;
+    // Apply model matrix
+    vec4 worldPos = M * skinnedPosition;
+
+    gl_Position = MVP * worldPos;
 
     // World-space geometry
     worldPosition = skinnedPosition.xyz;

@@ -38,6 +38,7 @@ struct MyBot {
     GLuint lightPositionID;
     GLuint lightIntensityID;
     GLuint programID;
+    GLuint modelMatrixID;
 
     tinygltf::Model model;
 
@@ -146,7 +147,7 @@ struct MyBot {
         tinygltf::Model& model
     );
 
-    void render(glm::mat4 cameraMatrix);
+    void render(glm::mat4 cameraMatrix, const glm::mat4& M);
 
     void cleanup();
 };
