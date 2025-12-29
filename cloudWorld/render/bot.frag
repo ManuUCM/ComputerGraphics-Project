@@ -5,8 +5,15 @@ in vec3 worldNormal;
 
 out vec3 finalColor;
 
-uniform vec3 lightPosition;
-uniform vec3 lightIntensity;
+// Directional light (like planets)
+uniform vec3 lightDir;      // Direction TO the light
+uniform vec3 lightColor;    // Light color/intensity
+
+// Environment lighting
+uniform vec3 envColor;
+
+//uniform vec3 lightPosition;
+//uniform vec3 lightIntensity;
 
 // Fog uniforms
 uniform vec3 cameraPosition;
@@ -18,26 +25,24 @@ void main()
 {
 	vec3 N = normalize(worldNormal);
 
-	// Lighting
-	vec3 lightDir = lightPosition - worldPosition;
-	float lightDist = dot(lightDir, lightDir);
-	lightDir = normalize(lightDir);
-
-	vec3 direct = lightIntensity * clamp(dot(lightDir, N), 0.0, 1.0) / lightDist;
+	// Directional (sun) lighting - same as planets
+	float ndl = max(dot(N, -lightDir), 0.0);  // -lightDir because lightDir points TO light
+	vec3 diffuse = ndl * lightColor;
 
 	// Ambient lighting (similar to planets)
 	// Add hemispherical environment lighting
 	float hemi = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
-	vec3 ambient = vec3(0.1, 0.1, 0.15) * hemi;  // blue
+	vec3 ambient = envColor * hemi;
 
 	// Combine lighting
-	vec3 v = direct + ambient;
+	vec3 albedo = vec3(1.0, 1.0, 1.0);  // White
+	vec3 color = albedo * (ambient + diffuse);
 
 	// Tone mapping
-	v = v / (1.0 + v);
+	color = color / (color + vec3(1.0));
 
 	// Gamma correction
-	vec3 color = pow(v, vec3(1.0 / 2.2));
+	color = pow(color, vec3(1.0 / 2.2));
 
 	// Apply fog if enabled
 	if (fogEnabled) {
