@@ -240,6 +240,9 @@ struct Planet {
 	float radius;
 	int textureIndex;
 	glm::mat4 modelMatrix;
+	glm::vec3 rotationAxis;
+	float rotationSpeed;
+	float rotationAngle;
 };
 
 std::vector<Planet> planets;
@@ -381,6 +384,12 @@ void init() {
 			float t = float(rand()) / RAND_MAX;   // [0,1]
 			p.radius = 2.5f + t * t * 10.0f;       // small planets common, big ones rare
 			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
+			// random rotation axis
+			p.rotationAxis = glm::normalize(randomInSphere(1.0f));
+			// random angular speed (slow, space-like)
+			p.rotationSpeed = 0.1f + (float(rand()) / RAND_MAX) * 0.3f;
+			// initial angle
+			p.rotationAngle = (float(rand()) / RAND_MAX) * glm::two_pi<float>();
 			valid = true;
 			for (const Planet& other : planets) {
 				glm::vec3 otherWrapped = wrapPlanetPosition(other.position);
@@ -458,6 +467,7 @@ void render() {
 
 		p.modelMatrix =
 			glm::translate(glm::mat4(1.0f), wrappedPos) *
+				glm::rotate(glm::mat4(1.0f), p.rotationAngle, p.rotationAxis) *
 				glm::scale(glm::mat4(1.0f), glm::vec3(p.radius));
 
 		modelMatrix = p.modelMatrix;
@@ -620,6 +630,9 @@ int main() {
 		humanoidAngle += humanoidAngularSpeed * dt;
 		botAnimTime += dt * playbackSpeed;
 		bot.update(botAnimTime);
+		for (Planet& p : planets) {
+			p.rotationAngle += p.rotationSpeed * dt;
+		}
 
 		// Shift key to increase speed if exploration is too slow
 		float currentSpeed = speed;
