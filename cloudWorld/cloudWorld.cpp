@@ -28,6 +28,11 @@ static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
 static float speedBoost = 2.5f;
 
+//Lighting
+static glm::vec3 lightDirection = glm::normalize(glm::vec3(1.0f, -0.5f, -0.3f));  // Direction from light
+static glm::vec3 lightColor = glm::vec3(1.0f, 0.95f, 0.9f);  // white sunlight
+static glm::vec3 envColor = glm::vec3(0.4f, 0.55f, 0.65f);   // blue environment light (medium level feature)
+
 // Skybox
 GLuint skyboxVAO;
 GLuint skyboxVertexBuffer;
@@ -458,9 +463,10 @@ void render() {
 
 	// Procedural planets
 	glUseProgram(planetProgramID);
-	// Environment lighting
-	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
-			0.4f, 0.55f, 0.65f);
+	// Set directional light
+	glUniform3fv(glGetUniformLocation(planetProgramID, "lightDir"), 1, glm::value_ptr(lightDirection));
+	glUniform3fv(glGetUniformLocation(planetProgramID, "lightColor"), 1, glm::value_ptr(lightColor));
+	glUniform3fv(glGetUniformLocation(planetProgramID, "envColor"), 1, glm::value_ptr(envColor));
 
 	GLuint fogEnabledID = glGetUniformLocation(planetProgramID, "fogEnabled");
 	GLuint fogColorID = glGetUniformLocation(planetProgramID, "fogColor");
@@ -553,7 +559,10 @@ void render() {
 			glm::scale(glm::mat4(1.0f), glm::vec3(humanoidScale));
 
 		bot.cameraPosition = eye_center;  // Update camera position each frame
-		bot.render(projectionMatrix * viewMatrix, humanoidModelMatrix);
+		bot.lightDirection = lightDirection;
+		MyBot::lightColor = lightColor;
+		MyBot::envColor = envColor;
+		bot.render(projectionMatrix * viewMatrix, humanoidModelMatrix, lightDirection, lightColor, envColor);
 
 		// glm::mat4 markerModel =
 		// 	glm::translate(glm::mat4(1.0f), humanoidWorldPos) *

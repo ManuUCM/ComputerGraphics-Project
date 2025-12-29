@@ -16,11 +16,22 @@ uniform bool fogEnabled;
 
 void main()
 {
+	vec3 N = normalize(worldNormal);
+
 	// Lighting
 	vec3 lightDir = lightPosition - worldPosition;
 	float lightDist = dot(lightDir, lightDir);
 	lightDir = normalize(lightDir);
-	vec3 v = lightIntensity * clamp(dot(lightDir, worldNormal), 0.0, 1.0) / lightDist;
+
+	vec3 direct = lightIntensity * clamp(dot(lightDir, N), 0.0, 1.0) / lightDist;
+
+	// Ambient lighting (similar to planets)
+	// Add hemispherical environment lighting
+	float hemi = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
+	vec3 ambient = vec3(0.1, 0.1, 0.15) * hemi;  // blue
+
+	// Combine lighting
+	vec3 v = direct + ambient;
 
 	// Tone mapping
 	v = v / (1.0 + v);

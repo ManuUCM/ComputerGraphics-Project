@@ -6,6 +6,9 @@
 #include <tiny_gltf.h>
 #include <sys/stat.h>
 
+glm::vec3 MyBot::lightDirection;
+glm::vec3 MyBot::lightColor;
+glm::vec3 MyBot::envColor;
 
 glm::mat4 MyBot::getNodeTransform(const tinygltf::Node& node) {
 	glm::mat4 transform(1.0f);
@@ -462,8 +465,8 @@ void MyBot::initialize() {
 
 	// Get a handle for GLSL variables
 	mvpMatrixID = glGetUniformLocation(programID, "MVP");
-	lightPositionID = glGetUniformLocation(programID, "lightPosition");
-	lightIntensityID = glGetUniformLocation(programID, "lightIntensity");
+	//lightPositionID = glGetUniformLocation(programID, "lightPosition");
+	//lightIntensityID = glGetUniformLocation(programID, "lightIntensity");
 	// Retrieve the uniform ID for the joint matrix array
 	// I need the ID for the skinning To-Do in render() -> "Set animation data for linear blend skinning in shader"
 	jointMatricesID = glGetUniformLocation(programID, "jointMatrices");
@@ -635,7 +638,8 @@ void MyBot::drawModel(const std::vector<PrimitiveObject>& primitiveObjects, tiny
 	}
 }
 
-void MyBot::render(glm::mat4 cameraMatrix, const glm::mat4& M) {
+void MyBot::render(glm::mat4 cameraMatrix, const glm::mat4& M, const glm::vec3& lightDir, const glm::vec3& lightCol,
+			const glm::vec3& envCol) {
 	glUseProgram(programID);
 
 	// Set camera
@@ -714,8 +718,16 @@ void MyBot::render(glm::mat4 cameraMatrix, const glm::mat4& M) {
 	// glUniformMatrix4fv(modelMatrixID, 1, GL_FALSE, glm::value_ptr(identity));
 	// -----------------------------------------------------------------
 	// Set light data
-	glUniform3fv(lightPositionID, 1, &lightPosition[0]);
-	glUniform3fv(lightIntensityID, 1, &lightIntensity[0]);
+	//glUniform3fv(lightPositionID, 1, &lightPosition[0]);
+	//glUniform3fv(lightIntensityID, 1, &lightIntensity[0]);
+	// Set directional light (same as planets)
+	GLuint lightDirID = glGetUniformLocation(programID, "lightDir");
+	GLuint lightColorID = glGetUniformLocation(programID, "lightColor");
+	GLuint envColorID = glGetUniformLocation(programID, "envColor");
+
+	glUniform3fv(lightDirID, 1, glm::value_ptr(lightDirection));
+	glUniform3fv(lightColorID, 1, glm::value_ptr(lightColor));
+	glUniform3fv(envColorID, 1, glm::value_ptr(envColor));
 
 	// Draw the GLTF model
 	drawModel(primitiveObjects, model);

@@ -51,6 +51,10 @@ struct MyBot {
     float fogDensity;
     glm::vec3 cameraPosition;
 
+    static glm::vec3 lightDirection;
+    static glm::vec3 lightColor;
+    static glm::vec3 envColor;
+
     // Each VAO corresponds to each mesh primitive in the GLTF model
     struct PrimitiveObject {
         GLuint vao;
@@ -123,8 +127,6 @@ struct MyBot {
 
     bool loadModel(tinygltf::Model& model, const char* filename);
 
-    void preprocessModel();
-
     void initialize();
 
     void bindMesh(
@@ -158,7 +160,8 @@ struct MyBot {
         tinygltf::Model& model
     );
 
-    void render(glm::mat4 cameraMatrix, const glm::mat4& M);
+    void render(glm::mat4 cameraMatrix, const glm::mat4& M, const glm::vec3& lightDir, const glm::vec3& lightCol,
+            const glm::vec3& envCol);
 
     void cleanup();
 };
