@@ -6,6 +6,7 @@
 #include <tiny_gltf.h>
 #include <sys/stat.h>
 
+
 glm::mat4 MyBot::getNodeTransform(const tinygltf::Node& node) {
 	glm::mat4 transform(1.0f);
 
@@ -409,7 +410,11 @@ void MyBot::initialize() {
 	std::cout << "Bot model center: " << modelCenter.x << ", " << modelCenter.y << ", " << modelCenter.z << std::endl;
 	std::cout << "Bot model scale: " << modelScale << std::endl;
 
-	//skeletonOffset = glm::vec3(300, 20, -40);  // tune later on
+	//Fog params
+	fogEnabled = true;
+	fogColor = glm::vec3(0.02f, 0.02f, 0.08f);
+	fogDensity = 0.03f;
+	cameraPosition = glm::vec3(0.0f);
 
 	// Calculate skeleton root position from first joint
 	glm::vec3 skeletonRoot(0.0f);
@@ -645,6 +650,17 @@ void MyBot::render(glm::mat4 cameraMatrix, const glm::mat4& M) {
 	glUniform1f(scaleID, modelScale);
 	GLuint offsetID = glGetUniformLocation(programID, "skeletonOffset");
 	glUniform3fv(offsetID, 1, glm::value_ptr(skeletonOffset));
+
+	//fog
+	GLuint fogEnabledID = glGetUniformLocation(programID, "fogEnabled");
+	GLuint fogColorID = glGetUniformLocation(programID, "fogColor");
+	GLuint fogDensityID = glGetUniformLocation(programID, "fogDensity");
+	GLuint cameraPosID = glGetUniformLocation(programID, "cameraPosition");
+
+	glUniform1i(fogEnabledID, fogEnabled ? 1 : 0);
+	glUniform3fv(fogColorID, 1, glm::value_ptr(fogColor));
+	glUniform1f(fogDensityID, fogDensity);
+	glUniform3fv(cameraPosID, 1, glm::value_ptr(cameraPosition));
 
 	// -----------------------------------------------------------------
 	// TODO: Set animation data for linear blend skinning in shader

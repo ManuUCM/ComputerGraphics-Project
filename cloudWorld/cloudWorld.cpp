@@ -247,6 +247,11 @@ struct Planet {
 
 std::vector<Planet> planets;
 
+// Fog settings
+static bool fogEnabled = true;
+static glm::vec3 fogColor(0.02f, 0.02f, 0.08f);  // Dark blue, matching space theme
+static float fogDensity = 0.005f;  // Adjust for desired fog thickness
+
 glm::vec3 wrapPlanetPosition(const glm::vec3& planetPos) {
 	glm::vec3 p = planetPos;
 	p.x = wrapFloat(p.x - eye_center.x, WORLD_SIZE) + eye_center.x;
@@ -457,6 +462,16 @@ void render() {
 	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
 			0.4f, 0.55f, 0.65f);
 
+	GLuint fogEnabledID = glGetUniformLocation(planetProgramID, "fogEnabled");
+	GLuint fogColorID = glGetUniformLocation(planetProgramID, "fogColor");
+	GLuint fogDensityID = glGetUniformLocation(planetProgramID, "fogDensity");
+	GLuint cameraPosID = glGetUniformLocation(planetProgramID, "cameraPosition");
+
+	glUniform1i(fogEnabledID, fogEnabled ? 1 : 0);
+	glUniform3fv(fogColorID, 1, glm::value_ptr(fogColor));
+	glUniform1f(fogDensityID, fogDensity);
+	glUniform3fv(cameraPosID, 1, glm::value_ptr(eye_center));
+
 	for (Planet& p : planets) {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D,
@@ -537,6 +552,7 @@ void render() {
 			rotationMatrix *
 			glm::scale(glm::mat4(1.0f), glm::vec3(humanoidScale));
 
+		bot.cameraPosition = eye_center;  // Update camera position each frame
 		bot.render(projectionMatrix * viewMatrix, humanoidModelMatrix);
 
 		// glm::mat4 markerModel =
@@ -584,6 +600,28 @@ void cleanup() {
 static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
 		glfwSetWindowShouldClose(w, 1);
+	if (key == GLFW_KEY_F && action == GLFW_PRESS) {
+		// Toggle fog on/off
+		fogEnabled = !fogEnabled;
+		bot.fogEnabled = fogEnabled;
+		std::cout << "Fog " << (fogEnabled ? "enabled" : "disabled") << std::endl;
+	}
+
+	if (key == GLFW_KEY_EQUAL && action == GLFW_PRESS) {
+		// Increase fog density (make it thicker)
+		fogDensity += 0.005f;
+		fogDensity = std::min(fogDensity, 0.2f);  // Cap at 0.2
+		bot.fogDensity = fogDensity;           // Sync with bot
+		std::cout << "Fog density: " << fogDensity << std::endl;
+	}
+
+	if (key == GLFW_KEY_MINUS && action == GLFW_PRESS) {
+		// Decrease fog density (make it thinner)
+		fogDensity -= 0.005f;
+		fogDensity = std::max(fogDensity, 0.0f);  // Can't go negative
+		bot.fogDensity = fogDensity;
+		std::cout << "Fog density: " << fogDensity << std::endl;
+	}
 }
 
 int main() {
@@ -662,6 +700,7 @@ int main() {
 		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) eye_center += rgt * currentSpeed * dt;
 		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) eye_center += up  * currentSpeed * dt;
 		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) eye_center -= up  * currentSpeed * dt;
+
 
 		// Limit exploration - infinity illusion
 		wrapPosition(eye_center, WORLD_SIZE);

@@ -1,12 +1,19 @@
 #version 330 core
 in vec3 worldN;
 in vec2 UV;
+in vec3 worldPos;
 out vec3 finalColor;
 
 uniform vec3 lightDir;
 uniform vec3 lightColor;
 uniform vec3 envColor;
 uniform sampler2D diffuseTexture;
+
+// Fog uniforms
+uniform vec3 cameraPosition;
+uniform vec3 fogColor;
+uniform float fogDensity;
+uniform bool fogEnabled;
 
 void main(){
 	// Normalize the surface normal
@@ -53,6 +60,19 @@ void main(){
 	// --- Gamma correction ---
 	// Convert from linear space to sRGB
 	color = pow(color, vec3(1.0 / 2.2));
+
+	// Apply fog if enabled
+	if (fogEnabled) {
+		// Calculate distance from camera to fragment
+		float distance = length(worldPos - cameraPosition);
+
+		// Exponential squared fog: fogFactor = exp(-(density * distance)^2)
+		float fogFactor = exp(-pow(fogDensity * distance, 2.0));
+		fogFactor = clamp(fogFactor, 0.0, 1.0);
+
+		// Mix color with fog
+		color = mix(fogColor, color, fogFactor);
+	}
 
 	finalColor = color;
 }

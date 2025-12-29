@@ -5,12 +5,14 @@ layout(location=2) in vec2 vertexUV;
 
 out vec3 worldN;
 out vec2 UV;
+out vec3 worldPos;
 
 uniform mat4 MVP;
 uniform mat4 M;
 
 void main(){
     worldN = mat3(transpose(inverse(M))) * vertexNormal;
+    worldPos = (M * vec4(vertexPosition, 1.0)).xyz;
     UV = vertexUV;
     gl_Position = MVP * vec4(vertexPosition,1.0);
 }

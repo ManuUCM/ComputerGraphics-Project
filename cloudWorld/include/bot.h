@@ -46,6 +46,10 @@ struct MyBot {
     float modelScale;
     glm::vec3 skeletonOffset;  // Manual offset to center skeleton
 
+    bool fogEnabled;
+    glm::vec3 fogColor;
+    float fogDensity;
+    glm::vec3 cameraPosition;
 
     // Each VAO corresponds to each mesh primitive in the GLTF model
     struct PrimitiveObject {
