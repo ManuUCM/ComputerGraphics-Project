@@ -42,6 +42,11 @@ struct MyBot {
 
     tinygltf::Model model;
 
+    glm::vec3 modelCenter;
+    float modelScale;
+    glm::vec3 skeletonOffset;  // Manual offset to center skeleton
+
+
     // Each VAO corresponds to each mesh primitive in the GLTF model
     struct PrimitiveObject {
         GLuint vao;
@@ -113,6 +118,8 @@ struct MyBot {
     void update(float time);
 
     bool loadModel(tinygltf::Model& model, const char* filename);
+
+    void preprocessModel();
 
     void initialize();
 

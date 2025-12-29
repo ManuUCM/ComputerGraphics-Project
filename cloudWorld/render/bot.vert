@@ -16,10 +16,12 @@ uniform mat4 MVP;
 uniform mat4 M;
 uniform mat4 jointMatrices[100]; // Max joints
 
-void main() {
-    // Linear Blend Skinning formula:
-    // P_skinned = sum( Weight_i * JointMatrix_i ) * P_original
+uniform vec3 modelCenter;
+uniform float modelScale;
+uniform vec3 skeletonOffset;
 
+
+void main() {
     mat4 skinMatrix =
     weights.x * jointMatrices[joints.x] +
     weights.y * jointMatrices[joints.y] +
@@ -27,14 +29,12 @@ void main() {
     weights.w * jointMatrices[joints.w];
 
     vec4 skinnedPosition = skinMatrix * vec4(vertexPosition, 1.0);
+    vec3 centered = (skinnedPosition.xyz + modelCenter + skeletonOffset) * modelScale;
+    vec4 worldPos = M * vec4(centered, 1.0);
 
-    // Apply model matrix
-    vec4 worldPos = M * skinnedPosition;
-
+    worldPosition = worldPos.xyz;
     gl_Position = MVP * worldPos;
 
-    // World-space geometry
-    worldPosition = skinnedPosition.xyz;
-    mat3 normalMatrix = transpose(inverse(mat3(skinMatrix)));
-    worldNormal = normalMatrix * vertexNormal;
+    mat3 normalMatrix = transpose(inverse(mat3(M)));
+    worldNormal = normalMatrix * (mat3(skinMatrix) * vertexNormal);
 }

@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include "include/bot.h"
 
 static GLFWwindow* window = nullptr;
@@ -238,6 +239,7 @@ struct Planet {
 	glm::vec3 position;
 	float radius;
 	int textureIndex;
+	glm::mat4 modelMatrix;
 };
 
 std::vector<Planet> planets;
@@ -348,7 +350,7 @@ MyBot bot;
 
 int humanoidPlanetIndex = -1;
 float humanoidAngle = 0.0f;
-float humanoidAngularSpeed = 0.0f;
+float humanoidAngularSpeed = 0.5f;
 float humanoidRunRadiusFactor = 1.10f;
 static float botAnimTime = 0.0f;
 
@@ -375,15 +377,15 @@ void init() {
 
 		while (!valid) { // This time randomly placed planets need to respect minimal distances between other already created planets
 			p.position = randomInSphere(PLANET_FIELD_RADIUS);
+			glm::vec3 pWrapped = wrapPlanetPosition(p.position);
 			float t = float(rand()) / RAND_MAX;   // [0,1]
 			p.radius = 2.5f + t * t * 10.0f;       // small planets common, big ones rare
 			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
 			valid = true;
 			for (const Planet& other : planets) {
-				// float minDist = (p.radius + other.radius) * 1.6f;
-				// alternative if it still doesn't work with higher distance
+				glm::vec3 otherWrapped = wrapPlanetPosition(other.position);
 				float minDist = p.radius + other.radius + MIN_PLANET_DISTANCE;
-				if (glm::distance(p.position, other.position) < minDist) {
+				if (glm::distance(pWrapped, otherWrapped) < minDist) {
 					valid = false;
 					break;
 				}
@@ -446,7 +448,7 @@ void render() {
 	glUniform3f(glGetUniformLocation(planetProgramID, "envColor"),
 			0.4f, 0.55f, 0.65f);
 
-	for (const Planet& p : planets) {
+	for (Planet& p : planets) {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D,
 					  planetTextures[p.textureIndex]);
@@ -454,14 +456,16 @@ void render() {
 
 		glm::vec3 wrappedPos = wrapPlanetPosition(p.position);
 
-		modelMatrix =
+		p.modelMatrix =
 			glm::translate(glm::mat4(1.0f), wrappedPos) *
-			glm::scale(glm::mat4(1.0f), glm::vec3(p.radius));
+				glm::scale(glm::mat4(1.0f), glm::vec3(p.radius));
+
+		modelMatrix = p.modelMatrix;
 
 		glm::mat4 MVP = projectionMatrix * viewMatrix * modelMatrix;
 
 		glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &MVP[0][0]);
-		glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &modelMatrix[0][0]);
+		glUniformMatrix4fv(planetModelID, 1, GL_FALSE, glm::value_ptr(p.modelMatrix));
 
 		glBindVertexArray(sphereVAO);
 		glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
@@ -469,60 +473,80 @@ void render() {
 	glBindVertexArray(0);
 	glUseProgram(0);
 
-	//humanoid rendering
-	const Planet& hp = planets[humanoidPlanetIndex];
+	// Humanoid rendering
+	if (humanoidPlanetIndex >= 0 && humanoidPlanetIndex < planets.size()) {
+		const Planet& hp = planets[humanoidPlanetIndex];
 
-	float theta = humanoidAngle;
-	float phi = glm::radians(15.0f);
+		// Get wrapped planet position (same wrapping used for rendering planets)
+		glm::vec3 wrappedPlanetPos = wrapPlanetPosition(hp.position);
 
-	// planet model matrix (same as the one used to draw the planets)
-	glm::vec3 wrappedPos = wrapPlanetPosition(hp.position);
-	glm::mat4 planetModel = glm::translate(glm::mat4(1.0f), wrappedPos);
+		// Calculate position on planet surface using spherical coordinates
+		float theta = humanoidAngle;
+		float phi = glm::radians(25.0f);  // Latitude angle on planet
 
-	glm::vec3 localSurfacePos(
-		cos(theta) * sin(phi),
-		cos(phi),
-		sin(theta) * sin(phi)
-	);
+		// Position on unit sphere surface
+		glm::vec3 localSurfacePos(
+			sin(phi) * cos(theta),
+			cos(phi),
+			sin(phi) * sin(theta)
+		);
 
-	glm::vec3 markerPos = wrappedPos + localSurfacePos * (hp.radius * humanoidRunRadiusFactor);
+		// Scale to planet surface and apply run radius factor
+		glm::vec3 surfaceOffset = localSurfacePos * (hp.radius * 0.8f);
 
-	glm::mat4 markerModel =
-		glm::translate(glm::mat4(1.0f), markerPos) *
-		glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));   // small marker
+		// Final world position
+		glm::vec3 humanoidWorldPos = wrappedPlanetPos + surfaceOffset;
 
-	glm::mat4 markerMVP = projectionMatrix * viewMatrix * markerModel;
+		// Calculate orientation to stand upright on planet surface
+		glm::vec3 up_vector = glm::normalize(localSurfacePos);
+		glm::vec3 tangent = glm::normalize(glm::cross(glm::vec3(0, 1, 0), up_vector));
 
-	glUseProgram(planetProgramID);
-	glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &markerMVP[0][0]);
-	glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &markerModel[0][0]);
-	glBindVertexArray(sphereVAO);
-	glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
-	glBindVertexArray(0);
-	glUseProgram(0);
+		// Handle edge case when up_vector aligns with world Y axis
+		if (glm::length(tangent) < 0.001f) {
+			tangent = glm::vec3(1, 0, 0);
+		}
+		glm::vec3 forward = glm::normalize(glm::cross(up_vector, tangent));
 
-	// humanoid local transform (relative to planet)
-	glm::mat4 humanoidLocal = glm::translate(
-	glm::mat4(1.0f),
-	localSurfacePos * (hp.radius * humanoidRunRadiusFactor)
-	);
+		// Construct rotation matrix from orientation vectors
+		glm::mat4 rotationMatrix = glm::mat4(1.0f);
+		rotationMatrix[0] = glm::vec4(tangent, 0.0f);
+		rotationMatrix[1] = glm::vec4(up_vector, 0.0f);
+		rotationMatrix[2] = glm::vec4(forward, 0.0f);
 
-	// scale humanoid relative to planet
-	float humanoidScale = hp.radius * 0.12f;
-	humanoidLocal = humanoidLocal * glm::scale(glm::mat4(1.0f),
-		glm::vec3(humanoidScale)
-	);
+		// Scale humanoid proportionally to planet size
+		float humanoidScale = hp.radius * 2.0f;
 
-	// orientation
-	glm::vec3 normal = glm::normalize(localSurfacePos);
-	glm::vec3 tangent = glm::normalize(glm::cross(normal, glm::vec3(0,1,0)));
-	float yaw = atan2(-tangent.z, tangent.x);
-	humanoidLocal = humanoidLocal * glm::rotate(glm::mat4(1.0f), yaw, glm::vec3(0,1,0));
+		// Calculate a correction offset (we'll determine these empirically)
+		glm::vec3 botPositionCorrection = glm::vec3(1, 0, 1);  // Start with zero
 
-	// FINAL model matrix
-	glm::mat4 humanoidModel = planetModel * humanoidLocal;
+		// Apply correction to the humanoid's world position
+		glm::vec3 correctedHumanoidPos = humanoidWorldPos + botPositionCorrection;
 
-	bot.render(projectionMatrix * viewMatrix * humanoidModel, humanoidModel);
+		glm::mat4 humanoidModelMatrix =
+			glm::translate(glm::mat4(1.0f), correctedHumanoidPos) *
+			rotationMatrix *
+			glm::scale(glm::mat4(1.0f), glm::vec3(humanoidScale));
+
+		bot.render(projectionMatrix * viewMatrix, humanoidModelMatrix);
+
+		// glm::mat4 markerModel =
+		// 	glm::translate(glm::mat4(1.0f), humanoidWorldPos) *
+		// 	glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));   // small marker
+		//
+		// std::cout << "modelCenter from bot: [" << bot.modelCenter.x << ", "
+		//   << bot.modelCenter.y << ", " << bot.modelCenter.z << "]" << std::endl;
+		// std::cout << "modelScale from bot: " << bot.modelScale << std::endl;
+		//
+		// glm::mat4 markerMVP = projectionMatrix * viewMatrix * markerModel;
+		//
+		// glUseProgram(planetProgramID);
+		// glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &markerMVP[0][0]);
+		// glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &markerModel[0][0]);
+		// glBindVertexArray(sphereVAO);
+		// glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+		// glBindVertexArray(0);
+		// glUseProgram(0);
+	}
 }
 
 void cleanup() {
@@ -553,6 +577,7 @@ static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 }
 
 int main() {
+	std::srand(static_cast<unsigned int>(std::time(nullptr)) ^ uintptr_t(&main));
 	// Init GLFW
 	if (!glfwInit()) {
 		std::cerr << "Failed to init GLFW\n";
