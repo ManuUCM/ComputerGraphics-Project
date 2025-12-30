@@ -31,7 +31,7 @@ static float speedBoost = 2.5f;
 //Lighting
 static glm::vec3 lightDirection = glm::normalize(glm::vec3(1.0f, -0.5f, -0.3f));  // Direction from light
 static glm::vec3 lightColor = glm::vec3(1.0f, 0.95f, 0.9f);  // white sunlight
-static glm::vec3 envColor = glm::vec3(0.4f, 0.55f, 0.65f);   // blue environment light (medium level feature)
+static glm::vec3 envColor = glm::vec3(0.4f, 0.55f, 0.65f);   // blue environment light
 
 // Skybox
 GLuint skyboxVAO;
@@ -234,11 +234,6 @@ static const float MIN_PLANET_DISTANCE = 80.0f;
 static const int NUM_PLANET_TEXTURES = 20;
 GLuint planetTextures[NUM_PLANET_TEXTURES];
 GLuint planetTextureSampler;
-// Better spawn and despawn for procedural planets
-static const float SPAWN_RADIUS   = 260.0f;
-static const float DESPAWN_RADIUS = 300.0f;
-static const int   MAX_PLANETS    = 14;
-glm::vec3 lastSpawnCenter;
 
 struct Planet {
 	glm::vec3 position;
@@ -672,6 +667,10 @@ int main() {
 
 	double lastTime = glfwGetTime();
 
+	// FPS tracking
+	float fTime = 0.0f;
+	unsigned long frames = 0;
+
 	// Render Loop
 	while (!glfwWindowShouldClose(window)) {
 		double now = glfwGetTime();
@@ -732,6 +731,20 @@ int main() {
 
 		lookat = eye_center + forwardDir();
 		render();
+
+		// FPS tracking
+		frames++;
+		fTime += dt;
+		if (fTime > 2.0f) {
+			float fps = frames / fTime;
+			frames = 0;
+			fTime = 0;
+
+			std::stringstream ss;
+			ss << std::fixed << std::setprecision(2);
+			ss << "CloudWorld | FPS: " << fps;
+			glfwSetWindowTitle(window, ss.str().c_str());
+		}
 
 		glfwSwapBuffers(window);
 	}
