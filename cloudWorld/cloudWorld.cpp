@@ -231,7 +231,7 @@ static const int NUM_PLANETS = 14;
 static const float PLANET_FIELD_RADIUS = 220.0f;
 static const float MIN_PLANET_DISTANCE = 80.0f;
 //Textures
-static const int NUM_PLANET_TEXTURES = 17;
+static const int NUM_PLANET_TEXTURES = 20;
 GLuint planetTextures[NUM_PLANET_TEXTURES];
 GLuint planetTextureSampler;
 // Better spawn and despawn for procedural planets
@@ -418,7 +418,7 @@ void init() {
 	"../cloudWorld/render/box.frag"
 	);
 	planetTextures[0] = LoadTexture("../cloudWorld/assets/textures/aerialRock.jpg");
-	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/aerialMud.jpg");
+	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/aerialGrassRock.jpg");
 	planetTextures[2] = LoadTexture("../cloudWorld/assets/textures/jerseyMelange.jpg");
 	planetTextures[3] = LoadTexture("../cloudWorld/assets/textures/lichenRock.jpg");
 	planetTextures[4] = LoadTexture("../cloudWorld/assets/textures/rockBoulderDry.jpg");
@@ -426,14 +426,17 @@ void init() {
 	planetTextures[6] = LoadTexture("../cloudWorld/assets/textures/snowField.jpg");
 	planetTextures[7] = LoadTexture("../cloudWorld/assets/textures/barkWillow.jpg");
 	planetTextures[8] = LoadTexture("../cloudWorld/assets/textures/barkWillow2.jpg");
-	planetTextures[9] = LoadTexture("../cloudWorld/assets/textures/crepeSatin.jpg");
+	planetTextures[9] = LoadTexture("../cloudWorld/assets/textures/aerialRocks04.jpg");
 	planetTextures[10] = LoadTexture("../cloudWorld/assets/textures/gangesRiverPebbles.jpg");
 	planetTextures[11] = LoadTexture("../cloudWorld/assets/textures/gravel.jpg");
 	planetTextures[12] = LoadTexture("../cloudWorld/assets/textures/rockBump.jpg");
 	planetTextures[13] = LoadTexture("../cloudWorld/assets/textures/rockPitted.jpg");
-	planetTextures[14] = LoadTexture("../cloudWorld/assets/textures/roughLinen.jpg");
+	planetTextures[14] = LoadTexture("../cloudWorld/assets/textures/cliffSide.jpg");
 	planetTextures[15] = LoadTexture("../cloudWorld/assets/textures/terryCloth.jpg");
 	planetTextures[16] = LoadTexture("../cloudWorld/assets/textures/velourVelvet.jpg");
+	planetTextures[17] = LoadTexture("../cloudWorld/assets/textures/rock06.jpg");
+	planetTextures[18] = LoadTexture("../cloudWorld/assets/textures/rockBoulderCracked.jpg");
+	planetTextures[19] = LoadTexture("../cloudWorld/assets/textures/rocksGround05.jpg");
 
 	planetTextureSampler = glGetUniformLocation(planetProgramID, "diffuseTexture");
 	planetMatrixID = glGetUniformLocation(planetProgramID, "MVP");
