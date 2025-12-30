@@ -42,7 +42,7 @@ static GLuint shadowDepthTexture = 0;  // Depth texture for shadows
 // Shadow map projection parameters
 static float depthFoV = 60.0f;      // Field of view for shadow camera
 static float depthNear = 1.0f;      // Near plane
-static float depthFar = 1500.0f;    // Far plane (match your scene scale)
+static float depthFar = 3500.0f;    // Far plane
 
 // Skybox
 GLuint skyboxVAO;
@@ -289,7 +289,7 @@ GLuint planetProgramID;
 GLuint planetMatrixID;
 GLuint planetModelID;
 //Planet creation and positions
-static const int NUM_PLANETS = 14;
+static const int NUM_PLANETS = 20;
 static const float PLANET_FIELD_RADIUS = 220.0f;
 static const float MIN_PLANET_DISTANCE = 80.0f;
 //Textures
@@ -417,7 +417,6 @@ void createSphere(int stacks, int slices) {
 }
 
 MyBot bot;
-
 int humanoidPlanetIndex = -1;
 float humanoidAngle = 0.0f;
 float humanoidAngularSpeed = 0.5f;
@@ -453,7 +452,19 @@ void init() {
 			p.position = randomInSphere(PLANET_FIELD_RADIUS);
 			glm::vec3 pWrapped = wrapPlanetPosition(p.position);
 			float t = float(rand()) / RAND_MAX;   // [0,1]
-			p.radius = 2.5f + t * t * 10.0f;       // small planets common, big ones rare
+
+			// like the universe, I decided to make small planets common, big ones rare
+			float scaleType = float(rand()) / RAND_MAX;
+			if (scaleType < 0.7f) {
+				// Small planets/asteroids have very high change (70% chance)
+				p.radius = 1.0f + t * 5.0f;  // 1-6 units
+			} else if (scaleType < 0.95f) {
+				// Medium planets (25% chance)
+				p.radius = 8.0f + t * 8.0f;  // 8-16 units
+			} else {
+				// Gas giants (5% chance)
+				p.radius = 20.0f + t * 15.0f;  // 20-35 units
+			}
 			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
 			// random rotation axis
 			p.rotationAxis = glm::normalize(randomInSphere(1.0f));
@@ -478,6 +489,7 @@ void init() {
 	"../cloudWorld/render/box.vert",
 	"../cloudWorld/render/box.frag"
 	);
+	// Total of 20 textures, could be too much but given the randomness sometimes it can give cool combinations
 	planetTextures[0] = LoadTexture("../cloudWorld/assets/textures/aerialRock.jpg");
 	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/aerialGrassRock.jpg");
 	planetTextures[2] = LoadTexture("../cloudWorld/assets/textures/jerseyMelange.jpg");
@@ -509,7 +521,6 @@ void init() {
 		humanoidPlanetIndex = rand() % planets.size();
 	}
 	humanoidAngle = 0.0f;
-
 }
 
 void render() {
@@ -571,6 +582,7 @@ void render() {
 	glUseProgram(0);
 
 	// render bot shadow pass
+	// comments on each line for humanoid rendering are done in the light rendering
 	if (humanoidPlanetIndex >= 0 && humanoidPlanetIndex < planets.size()) {
 		const Planet& hp = planets[humanoidPlanetIndex];
 		glm::vec3 wrappedPlanetPos = wrapPlanetPosition(hp.position);
@@ -618,7 +630,7 @@ void render() {
 	int windowWidth, windowHeight;
 	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 	glViewport(0, 0, windowWidth, windowHeight);
-	// ===== END SHADOW PASS =====
+	// end shadow pass
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -632,6 +644,7 @@ void render() {
 	glUniform3fv(glGetUniformLocation(planetProgramID, "lightColor"), 1, glm::value_ptr(lightColor));
 	glUniform3fv(glGetUniformLocation(planetProgramID, "envColor"), 1, glm::value_ptr(envColor));
 
+	// fog inclusion
 	GLuint fogEnabledID = glGetUniformLocation(planetProgramID, "fogEnabled");
 	GLuint fogColorID = glGetUniformLocation(planetProgramID, "fogColor");
 	GLuint fogDensityID = glGetUniformLocation(planetProgramID, "fogDensity");
@@ -642,6 +655,7 @@ void render() {
 	glUniform1f(fogDensityID, fogDensity);
 	glUniform3fv(cameraPosID, 1, glm::value_ptr(eye_center));
 
+	// planets rendering
 	for (Planet& p : planets) {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D,
@@ -683,11 +697,11 @@ void render() {
 		// Get wrapped planet position (same wrapping used for rendering planets)
 		glm::vec3 wrappedPlanetPos = wrapPlanetPosition(hp.position);
 
-		// Calculate position on planet surface using spherical coordinates
+		// calculate position on planet surface using spherical coordinates
 		float theta = humanoidAngle;
 		float phi = glm::radians(25.0f);  // Latitude angle on planet
 
-		// Position on unit sphere surface
+		// position on unit sphere surface (shown in lectures and quiz)
 		glm::vec3 localSurfacePos(
 			sin(phi) * cos(theta),
 			cos(phi),
@@ -696,33 +710,34 @@ void render() {
 
 		// Scale to planet surface and apply run radius factor
 		glm::vec3 surfaceOffset = localSurfacePos * (hp.radius * 0.8f);
+		// gives a little distance away off the planet so that it does not intersect with the surface and look odd
 
 		// Final world position
 		glm::vec3 humanoidWorldPos = wrappedPlanetPos + surfaceOffset;
 
-		// Calculate orientation to stand upright on planet surface
+		// orientation to stand upright on planet surface
 		glm::vec3 up_vector = glm::normalize(localSurfacePos);
 		glm::vec3 tangent = glm::normalize(glm::cross(glm::vec3(0, 1, 0), up_vector));
 
-		// Handle edge case when up_vector aligns with world Y axis
+		// handle edge case when up_vector aligns with world Y axis
 		if (glm::length(tangent) < 0.001f) {
 			tangent = glm::vec3(1, 0, 0);
 		}
 		glm::vec3 forward = glm::normalize(glm::cross(up_vector, tangent));
 
-		// Construct rotation matrix from orientation vectors
+		// given the orientation vectors, make the rotationMatrix for the bot to follow
 		glm::mat4 rotationMatrix = glm::mat4(1.0f);
 		rotationMatrix[0] = glm::vec4(tangent, 0.0f);
 		rotationMatrix[1] = glm::vec4(up_vector, 0.0f);
 		rotationMatrix[2] = glm::vec4(forward, 0.0f);
 
 		// Scale humanoid proportionally to planet size
-		float humanoidScale = hp.radius * 2.0f;
+		float humanoidScale = hp.radius * 2.0f; // looks a little unrealistic but it's funny to see for the fantasy of the world
 
-		// Calculate a correction offset (we'll determine these empirically)
+		// calculate a correction offset (trial and error procedure, could not reason any other approach after much debugging)
 		glm::vec3 botPositionCorrection = glm::vec3(1, 0, 1);  // Start with zero
 
-		// Apply correction to the humanoid's world position
+		// correction to the humanoid's world position to bring it towards the chosen planet
 		glm::vec3 correctedHumanoidPos = humanoidWorldPos + botPositionCorrection;
 
 		glm::mat4 humanoidModelMatrix =
@@ -738,6 +753,7 @@ void render() {
 		MyBot::shadowDepthTexture = shadowDepthTexture;
 		bot.render(projectionMatrix * viewMatrix, humanoidModelMatrix, lightDirection, lightColor, envColor);
 
+		// Debugging sphere to help place the humanoid right at the planet
 		// glm::mat4 markerModel =
 		// 	glm::translate(glm::mat4(1.0f), humanoidWorldPos) *
 		// 	glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));   // small marker
@@ -782,6 +798,7 @@ void cleanup() {
 
 static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
+		// press esc to close window, say this for report (way better than clicking on the x button everytime)
 		glfwSetWindowShouldClose(w, 1);
 	if (key == GLFW_KEY_F && action == GLFW_PRESS) {
 		// Toggle fog on/off
@@ -791,7 +808,7 @@ static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	}
 
 	if (key == GLFW_KEY_EQUAL && action == GLFW_PRESS) {
-		// Increase fog density (make it thicker)
+		// Increase fog density (see less of the planets far away)
 		fogDensity += 0.005f;
 		fogDensity = std::min(fogDensity, 0.2f);  // Cap at 0.2
 		bot.fogDensity = fogDensity;           // Sync with bot
@@ -799,7 +816,7 @@ static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	}
 
 	if (key == GLFW_KEY_MINUS && action == GLFW_PRESS) {
-		// Decrease fog density (make it thinner)
+		// Decrease fog density (see more at a distance)
 		fogDensity -= 0.005f;
 		fogDensity = std::max(fogDensity, 0.0f);  // Can't go negative
 		bot.fogDensity = fogDensity;
@@ -808,7 +825,9 @@ static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 }
 
 int main() {
+	// Randomizer
 	std::srand(static_cast<unsigned int>(std::time(nullptr)) ^ uintptr_t(&main));
+
 	// Init GLFW
 	if (!glfwInit()) {
 		std::cerr << "Failed to init GLFW\n";
@@ -843,7 +862,7 @@ int main() {
 
 	double lastTime = glfwGetTime();
 
-	// FPS tracking
+	// FPS tracking as in lab4
 	float fTime = 0.0f;
 	unsigned long frames = 0;
 
@@ -888,7 +907,6 @@ int main() {
 		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) eye_center += up  * currentSpeed * dt;
 		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) eye_center -= up  * currentSpeed * dt;
 
-
 		// Limit exploration - infinity illusion
 		wrapPosition(eye_center, WORLD_SIZE);
 
@@ -908,7 +926,7 @@ int main() {
 		lookat = eye_center + forwardDir();
 		render();
 
-		// FPS tracking
+		// FPS increment
 		frames++;
 		fTime += dt;
 		if (fTime > 2.0f) {
