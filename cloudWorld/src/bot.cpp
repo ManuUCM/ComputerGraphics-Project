@@ -9,6 +9,8 @@
 glm::vec3 MyBot::lightDirection;
 glm::vec3 MyBot::lightColor;
 glm::vec3 MyBot::envColor;
+glm::mat4 MyBot::lightVP;
+GLuint MyBot::shadowDepthTexture;
 
 glm::mat4 MyBot::getNodeTransform(const tinygltf::Node& node) {
 	glm::mat4 transform(1.0f);
@@ -665,6 +667,14 @@ void MyBot::render(glm::mat4 cameraMatrix, const glm::mat4& M, const glm::vec3& 
 	glUniform3fv(fogColorID, 1, glm::value_ptr(fogColor));
 	glUniform1f(fogDensityID, fogDensity);
 	glUniform3fv(cameraPosID, 1, glm::value_ptr(cameraPosition));
+
+	GLuint lightVPID = glGetUniformLocation(programID, "LightVP");
+	glUniformMatrix4fv(lightVPID, 1, GL_FALSE, glm::value_ptr(lightVP));
+
+	// Bind shadow map
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, shadowDepthTexture);
+	glUniform1i(glGetUniformLocation(programID, "shadowMap"), 1);
 
 	// -----------------------------------------------------------------
 	// TODO: Set animation data for linear blend skinning in shader

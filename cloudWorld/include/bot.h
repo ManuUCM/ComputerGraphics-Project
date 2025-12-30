@@ -55,6 +55,9 @@ struct MyBot {
     static glm::vec3 lightColor;
     static glm::vec3 envColor;
 
+    static glm::mat4 lightVP;
+    static GLuint shadowDepthTexture;
+
     // Each VAO corresponds to each mesh primitive in the GLTF model
     struct PrimitiveObject {
         GLuint vao;

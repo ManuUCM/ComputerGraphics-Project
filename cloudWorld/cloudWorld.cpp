@@ -33,6 +33,17 @@ static glm::vec3 lightDirection = glm::normalize(glm::vec3(1.0f, -0.5f, -0.3f));
 static glm::vec3 lightColor = glm::vec3(1.0f, 0.95f, 0.9f);  // white sunlight
 static glm::vec3 envColor = glm::vec3(0.4f, 0.55f, 0.65f);   // blue environment light
 
+// Shadow mapping
+static int shadowMapWidth = 4096;   // Shadow map resolution
+static int shadowMapHeight = 4096;
+static GLuint shadowFBO = 0;        // Shadow framebuffer object
+static GLuint shadowDepthTexture = 0;  // Depth texture for shadows
+
+// Shadow map projection parameters
+static float depthFoV = 60.0f;      // Field of view for shadow camera
+static float depthNear = 1.0f;      // Near plane
+static float depthFar = 1500.0f;    // Far plane (match your scene scale)
+
 // Skybox
 GLuint skyboxVAO;
 GLuint skyboxVertexBuffer;
@@ -211,6 +222,57 @@ static void wrapPosition(glm::vec3& p, float size) {
 	p.z = wrapFloat(p.z, size);
 }
 
+static void initShadowFBO() {
+	// Generate framebuffer
+	glGenFramebuffers(1, &shadowFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+
+	// Create depth texture
+	glGenTextures(1, &shadowDepthTexture);
+	glBindTexture(GL_TEXTURE_2D, shadowDepthTexture);
+
+	glTexImage2D(
+		GL_TEXTURE_2D,
+		0,
+		GL_DEPTH_COMPONENT,
+		shadowMapWidth,
+		shadowMapHeight,
+		0,
+		GL_DEPTH_COMPONENT,
+		GL_FLOAT,
+		NULL
+	);
+
+	// Texture parameters
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+
+	float borderColor[] = {1.0f, 1.0f, 1.0f, 1.0f};
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+	// Attach depth texture to FBO
+	glFramebufferTexture2D(
+		GL_FRAMEBUFFER,
+		GL_DEPTH_ATTACHMENT,
+		GL_TEXTURE_2D,
+		shadowDepthTexture,
+		0
+	);
+
+	// No color buffer, only depth
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+
+	// Check if framebuffer is complete
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+		std::cerr << "Shadow framebuffer is not complete!" << std::endl;
+	}
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
 
 struct Vertex {
 	glm::vec3 position;
@@ -375,6 +437,10 @@ void init() {
 
 	// Skybox
 	initSkybox();
+
+	// Initialize shadow mapping
+	initShadowFBO();
+
 	createSphere(64, 64);
 	planets.clear();
 	srand(42);
@@ -447,12 +513,112 @@ void init() {
 }
 
 void render() {
+	// light's view-projection matrix calculation for shadow map
+	glm::vec3 lightPos = eye_center + glm::normalize(-lightDirection) * 200.0f;
+	glm::mat4 lightView = glm::lookAt(
+		lightPos,
+		lightPos + lightDirection,
+		glm::vec3(0.0f, 1.0f, 0.0f)
+	);
+
+	glm::mat4 lightProjection = glm::perspective(
+		glm::radians(90.0f),  // FOV
+		1.0f,                  // Aspect ratio (square shadow map)
+		1.0f,                  // Near
+		1500.0f                // Far
+	);
+
+	glm::mat4 lightVP = lightProjection * lightView;
+
 	// Update view matrix
 	viewMatrix = glm::lookAt(
 		eye_center,
 		lookat,
 		up
 	);
+
+	// Shadow pass
+	glBindFramebuffer(GL_FRAMEBUFFER, shadowFBO);
+	glViewport(0, 0, shadowMapWidth, shadowMapHeight);
+
+	// write to depth buffer, not color
+	glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+	glClear(GL_DEPTH_BUFFER_BIT);
+
+	// render planets for shadow map
+	glUseProgram(planetProgramID);
+	for (Planet& p : planets) {
+		glm::vec3 wrappedPos = wrapPlanetPosition(p.position);
+
+		p.modelMatrix =
+			glm::translate(glm::mat4(1.0f), wrappedPos) *
+			glm::rotate(glm::mat4(1.0f), p.rotationAngle, p.rotationAxis) *
+			glm::scale(glm::mat4(1.0f), glm::vec3(p.radius));
+
+		// Use lightVP instead of camera MVP
+		glm::mat4 lightMVP = lightVP * p.modelMatrix;
+		glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, glm::value_ptr(lightMVP));
+		glUniformMatrix4fv(planetModelID, 1, GL_FALSE, glm::value_ptr(p.modelMatrix));
+
+		// Pass LightVP to shader
+		GLuint lightVPID = glGetUniformLocation(planetProgramID, "LightVP");
+		glUniformMatrix4fv(lightVPID, 1, GL_FALSE, glm::value_ptr(lightVP));
+
+		glBindVertexArray(sphereVAO);
+		glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+	}
+	glBindVertexArray(0);
+	glUseProgram(0);
+
+	// render bot shadow pass
+	if (humanoidPlanetIndex >= 0 && humanoidPlanetIndex < planets.size()) {
+		const Planet& hp = planets[humanoidPlanetIndex];
+		glm::vec3 wrappedPlanetPos = wrapPlanetPosition(hp.position);
+
+		float theta = humanoidAngle;
+		float phi = glm::radians(25.0f);
+		glm::vec3 localSurfacePos(
+			sin(phi) * cos(theta),
+			cos(phi),
+			sin(phi) * sin(theta)
+		);
+		glm::vec3 surfaceOffset = localSurfacePos * (hp.radius * 0.8f);
+		glm::vec3 humanoidWorldPos = wrappedPlanetPos + surfaceOffset;
+
+		glm::vec3 up_vector = glm::normalize(localSurfacePos);
+		glm::vec3 tangent = glm::normalize(glm::cross(glm::vec3(0, 1, 0), up_vector));
+		if (glm::length(tangent) < 0.001f) {
+			tangent = glm::vec3(1, 0, 0);
+		}
+		glm::vec3 forward = glm::normalize(glm::cross(up_vector, tangent));
+
+		glm::mat4 rotationMatrix = glm::mat4(1.0f);
+		rotationMatrix[0] = glm::vec4(tangent, 0.0f);
+		rotationMatrix[1] = glm::vec4(up_vector, 0.0f);
+		rotationMatrix[2] = glm::vec4(forward, 0.0f);
+
+		float humanoidScale = hp.radius * 2.0f;
+		glm::vec3 botPositionCorrection = glm::vec3(1, 0, 1);
+		glm::vec3 correctedHumanoidPos = humanoidWorldPos + botPositionCorrection;
+
+		glm::mat4 humanoidModelMatrix =
+			glm::translate(glm::mat4(1.0f), correctedHumanoidPos) *
+			rotationMatrix *
+			glm::scale(glm::mat4(1.0f), glm::vec3(humanoidScale));
+
+		bot.render(lightVP, humanoidModelMatrix, lightDirection, lightColor, envColor);
+	}
+	// end of shadow pass
+
+	// Re-enable color writes
+	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+
+	// Restore default framebuffer
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	int windowWidth, windowHeight;
+	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+	glViewport(0, 0, windowWidth, windowHeight);
+	// ===== END SHADOW PASS =====
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -495,6 +661,14 @@ void render() {
 
 		glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &MVP[0][0]);
 		glUniformMatrix4fv(planetModelID, 1, GL_FALSE, glm::value_ptr(p.modelMatrix));
+
+		GLuint lightVPID = glGetUniformLocation(planetProgramID, "LightVP");
+		glUniformMatrix4fv(lightVPID, 1, GL_FALSE, glm::value_ptr(lightVP));
+
+		// Bind shadow map texture
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, shadowDepthTexture);
+		glUniform1i(glGetUniformLocation(planetProgramID, "shadowMap"), 1);
 
 		glBindVertexArray(sphereVAO);
 		glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
@@ -560,6 +734,8 @@ void render() {
 		bot.lightDirection = lightDirection;
 		MyBot::lightColor = lightColor;
 		MyBot::envColor = envColor;
+		MyBot::lightVP = lightVP;
+		MyBot::shadowDepthTexture = shadowDepthTexture;
 		bot.render(projectionMatrix * viewMatrix, humanoidModelMatrix, lightDirection, lightColor, envColor);
 
 		// glm::mat4 markerModel =

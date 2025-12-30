@@ -2,12 +2,15 @@
 in vec3 worldN;
 in vec2 UV;
 in vec3 worldPos;
+in vec4 lightSpacePos;
+
 out vec3 finalColor;
 
 uniform vec3 lightDir;
 uniform vec3 lightColor;
 uniform vec3 envColor;
 uniform sampler2D diffuseTexture;
+uniform sampler2D shadowMap;
 
 // Fog uniforms
 uniform vec3 cameraPosition;
@@ -52,6 +55,19 @@ void main(){
 	// it with global illumination from the environment.
 	vec3 albedo = texture(diffuseTexture, UV).rgb;
 	vec3 color = albedo * (ambient + diffuse);
+
+	// Convert from light clip space to NDC to UV coordinates
+	vec3 proj = lightSpacePos.xyz / lightSpacePos.w;
+	vec2 shadowUV = proj.xy * 0.5 + 0.5;
+	float depth = proj.z * 0.5 + 0.5;
+
+	// Apply shadow if within shadow map bounds
+	if (shadowUV.x >= 0.0 && shadowUV.x <= 1.0 && shadowUV.y >= 0.0 && shadowUV.y <= 1.0) {
+		float existingDepth = texture(shadowMap, shadowUV).r;
+		// Shadow test
+		float shadow = (depth >= existingDepth + 0.003) ? 0.3 : 1.0;
+		color *= shadow;
+	}
 
 	// --- Tone mapping (Reinhard) ---
 	// C_out = C / (C + 1)
