@@ -13,7 +13,7 @@
 
 static GLFWwindow* window = nullptr;
 
-// Static Camera
+// Camera settings and MVP matrices
 glm::mat4 viewMatrix;
 glm::mat4 projectionMatrix;
 glm::mat4 modelMatrix;
@@ -23,9 +23,13 @@ glm::float32 zFar  = 3500.0f;
 static glm::vec3 eye_center(0.0f, 0.0f, 10.0f);
 static glm::vec3 lookat(0.0f, 0.0f, 0.0f);
 static glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+// For camera rotation where yax control horizontal and pitch controls vertical rotation
 static float yaw = 0.0f;    // left/right
 static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
+// Default movement is slow but adequate for an analyzing exploration
+// however I added a speedbost pressing left shift to increase exploration movement for all directions
 static float speedBoost = 2.5f;
 
 //Lighting
@@ -336,11 +340,11 @@ glm::vec3 randomInSphere(float radius) {
 }
 
 void createSphere(int stacks, int slices) {
-	// Sphere formula (inspired in quiz and lighting lecture
+	// Sphere formula (inspired in quiz and lighting lecture)
 	// x= sin(ϕ) * cos(θ)
 	// y= cos(ϕ)
 	// z= sin(ϕ) * sin(θ)
-	// where ϕ ∈ [0,π] (stacks) and 𝜃 ∈ [0,2𝜋] θ ∈ [0,2π] (slices).
+	// where ϕ ∈ [0,π] (stacks) and θ ∈ [0,2π] (slices).
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
@@ -491,17 +495,17 @@ void init() {
 	);
 	// Total of 20 textures, could be too much but given the randomness sometimes it can give cool combinations
 	planetTextures[0] = LoadTexture("../cloudWorld/assets/textures/aerialRock.jpg");
-	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/aerialGrassRock.jpg");
+	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/wafflePiqueCotton.jpg");
 	planetTextures[2] = LoadTexture("../cloudWorld/assets/textures/jerseyMelange.jpg");
 	planetTextures[3] = LoadTexture("../cloudWorld/assets/textures/lichenRock.jpg");
 	planetTextures[4] = LoadTexture("../cloudWorld/assets/textures/rockBoulderDry.jpg");
-	planetTextures[5] = LoadTexture("../cloudWorld/assets/textures/slateFloor.jpg");
+	planetTextures[5] = LoadTexture("../cloudWorld/assets/textures/quatrefoilJacquardFabric.jpg");
 	planetTextures[6] = LoadTexture("../cloudWorld/assets/textures/snowField.jpg");
-	planetTextures[7] = LoadTexture("../cloudWorld/assets/textures/barkWillow.jpg");
-	planetTextures[8] = LoadTexture("../cloudWorld/assets/textures/barkWillow2.jpg");
+	planetTextures[7] = LoadTexture("../cloudWorld/assets/textures/mossyBrick.jpg");
+	planetTextures[8] = LoadTexture("../cloudWorld/assets/textures/redSlateRoofTiles.jpg");
 	planetTextures[9] = LoadTexture("../cloudWorld/assets/textures/aerialRocks04.jpg");
-	planetTextures[10] = LoadTexture("../cloudWorld/assets/textures/gangesRiverPebbles.jpg");
-	planetTextures[11] = LoadTexture("../cloudWorld/assets/textures/gravel.jpg");
+	planetTextures[10] = LoadTexture("../cloudWorld/assets/textures/brokenBrickWall.jpg");
+	planetTextures[11] = LoadTexture("../cloudWorld/assets/textures/ginghamCheck.jpg");
 	planetTextures[12] = LoadTexture("../cloudWorld/assets/textures/rockBump.jpg");
 	planetTextures[13] = LoadTexture("../cloudWorld/assets/textures/rockPitted.jpg");
 	planetTextures[14] = LoadTexture("../cloudWorld/assets/textures/cliffSide.jpg");
@@ -754,16 +758,14 @@ void render() {
 		bot.render(projectionMatrix * viewMatrix, humanoidModelMatrix, lightDirection, lightColor, envColor);
 
 		// Debugging sphere to help place the humanoid right at the planet
+		// sphere being mapped with the box shaders was perfectly placed near the planet
+		// so I used this markerSphere to approximate the distance to the bot that had an additional
+		// given the joints offset
+
 		// glm::mat4 markerModel =
 		// 	glm::translate(glm::mat4(1.0f), humanoidWorldPos) *
-		// 	glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));   // small marker
-		//
-		// std::cout << "modelCenter from bot: [" << bot.modelCenter.x << ", "
-		//   << bot.modelCenter.y << ", " << bot.modelCenter.z << "]" << std::endl;
-		// std::cout << "modelScale from bot: " << bot.modelScale << std::endl;
-		//
+		// 	glm::scale(glm::mat4(1.0f), glm::vec3(0.5f));   // relatively small
 		// glm::mat4 markerMVP = projectionMatrix * viewMatrix * markerModel;
-		//
 		// glUseProgram(planetProgramID);
 		// glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, &markerMVP[0][0]);
 		// glUniformMatrix4fv(planetModelID,  1, GL_FALSE, &markerModel[0][0]);
@@ -853,8 +855,6 @@ int main() {
 		std::cerr << "Failed to init GLAD\n";
 		return -1;
 	}
-
-	glPointSize(10.0f);
 
 	glEnable(GL_DEPTH_TEST);
 

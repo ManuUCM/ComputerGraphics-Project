@@ -6,11 +6,12 @@
 #include <tiny_gltf.h>
 #include <sys/stat.h>
 
+// lighting and shadow parameters for all bot instances
 glm::vec3 MyBot::lightDirection;
 glm::vec3 MyBot::lightColor;
 glm::vec3 MyBot::envColor;
-glm::mat4 MyBot::lightVP;
-GLuint MyBot::shadowDepthTexture;
+glm::mat4 MyBot::lightVP;			// Light view-projection for shadow mapping
+GLuint MyBot::shadowDepthTexture;	// shadow map texture
 
 glm::mat4 MyBot::getNodeTransform(const tinygltf::Node& node) {
 	glm::mat4 transform(1.0f);
@@ -356,42 +357,12 @@ void MyBot::initialize() {
 		return;
 	}
 
-	std::cout << "=== BOT MODEL VERTEX BOUNDS ===" << std::endl;
-	for (size_t meshIdx = 0; meshIdx < model.meshes.size(); meshIdx++) {
-		for (size_t primIdx = 0; primIdx < model.meshes[meshIdx].primitives.size(); primIdx++) {
-			const auto& primitive = model.meshes[meshIdx].primitives[primIdx];
-			auto it = primitive.attributes.find("POSITION");
-			if (it != primitive.attributes.end()) {
-				const auto& accessor = model.accessors[it->second];
-				std::cout << "Mesh " << meshIdx << " primitive " << primIdx << ":" << std::endl;
-				std::cout << "  Min: [" << accessor.minValues[0] << ", "
-						  << accessor.minValues[1] << ", " << accessor.minValues[2] << "]" << std::endl;
-				std::cout << "  Max: [" << accessor.maxValues[0] << ", "
-						  << accessor.maxValues[1] << ", " << accessor.maxValues[2] << "]" << std::endl;
-			}
-		}
-	}
-	std::cout << "================================" << std::endl;std::cout << "=== BOT MODEL VERTEX BOUNDS ===" << std::endl;
-	for (size_t meshIdx = 0; meshIdx < model.meshes.size(); meshIdx++) {
-		for (size_t primIdx = 0; primIdx < model.meshes[meshIdx].primitives.size(); primIdx++) {
-			const auto& primitive = model.meshes[meshIdx].primitives[primIdx];
-			auto it = primitive.attributes.find("POSITION");
-			if (it != primitive.attributes.end()) {
-				const auto& accessor = model.accessors[it->second];
-				std::cout << "Mesh " << meshIdx << " primitive " << primIdx << ":" << std::endl;
-				std::cout << "  Min: [" << accessor.minValues[0] << ", "
-						  << accessor.minValues[1] << ", " << accessor.minValues[2] << "]" << std::endl;
-				std::cout << "  Max: [" << accessor.maxValues[0] << ", "
-						  << accessor.maxValues[1] << ", " << accessor.maxValues[2] << "]" << std::endl;
-			}
-		}
-	}
-	std::cout << "================================" << std::endl;
-
 	// Prepare buffers for rendering
 	primitiveObjects = bindModel(model);
 
-	// Calculate centering/scale but DON'T modify the model
+	// Calculate centering/scale
+	// This centers the model at origin and scales to approximately 1 unit
+	// I believe it was needed because the GLTF model has offset center and large scale
 	glm::vec3 botMin(FLT_MAX);
 	glm::vec3 botMax(-FLT_MAX);
 
@@ -412,30 +383,24 @@ void MyBot::initialize() {
 	float botSize = glm::length(botMax - botMin);
 	modelScale = 1.0f / botSize;  // Normalize to 1 unit
 
-	std::cout << "Bot model center: " << modelCenter.x << ", " << modelCenter.y << ", " << modelCenter.z << std::endl;
-	std::cout << "Bot model scale: " << modelScale << std::endl;
-
-	//Fog params
+	// fog parameters for atmospheric depth effect
 	fogEnabled = true;
-	fogColor = glm::vec3(0.02f, 0.02f, 0.08f);
+	fogColor = glm::vec3(0.02f, 0.02f, 0.08f); // a dark blue matching the skybox nebula texture
 	fogDensity = 0.03f;
 	cameraPosition = glm::vec3(0.0f);
 
-	// Calculate skeleton root position from first joint
+	// Calculate skeleton root offset to position bot properly
+	// from my debugging: the skeleton's root joint may not be at the model's geometric center,
+	// so I compute an offset to align them
 	glm::vec3 skeletonRoot(0.0f);
 	if (!skinObjects.empty() && !skinObjects[0].inverseBindMatrices.empty()) {
 		// Get the inverse of the first inverse bind matrix to get the bind pose
 		glm::mat4 bindPose = glm::inverse(skinObjects[0].inverseBindMatrices[0]);
 		skeletonRoot = glm::vec3(bindPose[3]);
-
-		std::cout << "Skeleton root position: [" << skeletonRoot.x << ", "
-				  << skeletonRoot.y << ", " << skeletonRoot.z << "]" << std::endl;
 	}
 
 	// Calculate the offset needed
 	skeletonOffset = -(skeletonRoot + modelCenter);
-	std::cout << "Calculated skeletonOffset: [" << skeletonOffset.x << ", "
-			  << skeletonOffset.y << ", " << skeletonOffset.z << "]" << std::endl;
 
 	// Prepare joint matrices
 	skinObjects = prepareSkinning(model);
@@ -684,48 +649,6 @@ void MyBot::render(glm::mat4 cameraMatrix, const glm::mat4& M, const glm::vec3& 
 		const std::vector<glm::mat4> &jointMatrices = skinObjects[0].jointMatrices;
 		glUniformMatrix4fv(jointMatricesID, jointMatrices.size(), GL_FALSE, glm::value_ptr(jointMatrices[0]));
 	}
-	// Apply M to ALL joint matrices
-	// if (!skinObjects.empty()) {
-	// 	static bool printed = false;
-	// 	if (!printed) {
-	// 		const glm::mat4& origJoint = skinObjects[0].jointMatrices[0];
-	// 		std::cout << "Original joint matrix:" << std::endl;
-	// 		for (int i = 0; i < 4; i++) {
-	// 			std::cout << "  [" << origJoint[i][0] << ", " << origJoint[i][1]
-	// 					  << ", " << origJoint[i][2] << ", " << origJoint[i][3] << "]" << std::endl;
-	// 		}
-	//
-	// 		// Checking scale by looking at basis vector lengths
-	// 		float scaleX = glm::length(glm::vec3(origJoint[0]));
-	// 		float scaleY = glm::length(glm::vec3(origJoint[1]));
-	// 		float scaleZ = glm::length(glm::vec3(origJoint[2]));
-	// 		std::cout << "Joint scales: X=" << scaleX << ", Y=" << scaleY << ", Z=" << scaleZ << std::endl;
-	// 		printed = true;
-	// 	}
-	// 	// std::vector<glm::mat4> transformedJoints;
-	// 	// transformedJoints.reserve(skinObjects[0].jointMatrices.size());
-	// 	//
-	// 	// for (const glm::mat4& jointMat : skinObjects[0].jointMatrices) {
-	// 	// 	transformedJoints.push_back(M * jointMat);
-	// 	// }
-	//
-	// 	// DEBUG: Print first transformed joint
-	// 	printed = false;
-	// 	if (!printed) {
-	// 		std::cout << "First transformed joint [3]: ["
-	// 				  << transformedJoints[0][3][0] << ", "
-	// 				  << transformedJoints[0][3][1] << ", "
-	// 				  << transformedJoints[0][3][2] << "]" << std::endl;
-	// 		printed = true;
-	// 	}
-	//
-	// 	glUniformMatrix4fv(jointMatricesID, transformedJoints.size(),
-	// 					  GL_FALSE, glm::value_ptr(transformedJoints[0]));
-	// }
-	//
-	// // Send IDENTITY as M since it's now baked into joints
-	// glm::mat4 identity(1.0f);
-	// glUniformMatrix4fv(modelMatrixID, 1, GL_FALSE, glm::value_ptr(identity));
 	// -----------------------------------------------------------------
 	// Set light data
 	//glUniform3fv(lightPositionID, 1, &lightPosition[0]);

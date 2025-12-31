@@ -42,19 +42,24 @@ struct MyBot {
 
     tinygltf::Model model;
 
+    // New attributes
+    // Model dimensions used for positioning
     glm::vec3 modelCenter;
     float modelScale;
     glm::vec3 skeletonOffset;  // Manual offset to center skeleton
 
+    // The bot should also be affected by the fog of the planets so I apply it as well
     bool fogEnabled;
     glm::vec3 fogColor;
     float fogDensity;
     glm::vec3 cameraPosition;
 
+    // Directional and hemi-environment lighting like the planets
     static glm::vec3 lightDirection;
     static glm::vec3 lightColor;
     static glm::vec3 envColor;
 
+    // Shadow mapping
     static glm::mat4 lightVP;
     static GLuint shadowDepthTexture;
 

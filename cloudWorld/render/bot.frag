@@ -6,8 +6,8 @@ in vec4 lightSpacePos;
 
 out vec3 finalColor;
 
-// Directional light (like planets)
-uniform vec3 lightDir;      // Direction TO the light
+// Directional light same as the planets' shaders
+uniform vec3 lightDir;      // Direction to the light
 uniform vec3 lightColor;    // Light color/intensity
 
 //shadow
@@ -16,8 +16,8 @@ uniform sampler2D shadowMap;
 // Environment lighting
 uniform vec3 envColor;
 
-//uniform vec3 lightPosition;
-//uniform vec3 lightIntensity;
+//uniform vec3 lightPosition;		by applying the same configuration as the planets I removed the lighting settings
+//uniform vec3 lightIntensity;		given in lab4
 
 // Fog uniforms
 uniform vec3 cameraPosition;

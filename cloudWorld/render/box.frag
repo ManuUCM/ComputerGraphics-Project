@@ -38,18 +38,18 @@ void main(){
 	// Environment (hemispherical) lighting
 	// Idea:
 	// Use the normal direction to estimate how much of the
-	// environment (sky / nebula) contributes to the surface.
+	// environment (nebula background) contributes to the surface.
 	// Approximate this by mapping the Y component of the normal
 	// from [-1, 1] to [0, 1]:
 	//   hemi = N.y * 0.5 + 0.5
-	// Surfaces facing "up" receive more environment light,
-	// surfaces facing "down" receive less.
+	// Surfaces facing say upwards receive more environment light,
+	// and those surfaces facing downwards receive less.
 	float hemi = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
 	vec3 ambient = envColor * hemi;
 
 	// Combine lighting with material color (albedo)
-	// We adapt environment lighting into Lambertian shading
-	// by ADDING it as an ambient term:
+	// adapt environment lighting into Lambertian shading
+	// by adding it as an ambient term:
 	//   L_total = albedo * (L_ambient + L_diffuse)
 	// This keeps the Lambertian model intact while improving
 	// it with global illumination from the environment.
@@ -65,16 +65,15 @@ void main(){
 	if (shadowUV.x >= 0.0 && shadowUV.x <= 1.0 && shadowUV.y >= 0.0 && shadowUV.y <= 1.0) {
 		float existingDepth = texture(shadowMap, shadowUV).r;
 		// Shadow test
-		float shadow = (depth >= existingDepth + 0.003) ? 0.3 : 1.0;
-		color *= shadow;
+		float shadow = (depth >= existingDepth + 0.003) ? 0.3 : 1.0; // had to increase bias to 0.003
+		color *= shadow;											 // due to lots of shadow acne
 	}
 
-	// --- Tone mapping (Reinhard) ---
+	// Tone mapping (Reinhard)
 	// C_out = C / (C + 1)
 	color = color / (color + vec3(1.0));
 
-	// --- Gamma correction ---
-	// Convert from linear space to sRGB
+	// Gamma correction
 	color = pow(color, vec3(1.0 / 2.2));
 
 	// Apply fog if enabled
