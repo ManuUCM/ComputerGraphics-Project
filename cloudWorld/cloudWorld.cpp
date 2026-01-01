@@ -18,7 +18,7 @@ glm::mat4 viewMatrix;
 glm::mat4 projectionMatrix;
 glm::mat4 modelMatrix;
 glm::float32 FoV   = 100.0f;
-glm::float32 zNear = 0.1f;
+glm::float32 zNear = 0.1f; // close near planet to approach planets
 glm::float32 zFar  = 3500.0f;
 static glm::vec3 eye_center(0.0f, 0.0f, 10.0f);
 static glm::vec3 lookat(0.0f, 0.0f, 0.0f);
@@ -46,7 +46,7 @@ static GLuint shadowDepthTexture = 0;  // Depth texture for shadows
 // Shadow map projection parameters
 static float depthFoV = 60.0f;      // Field of view for shadow camera
 static float depthNear = 1.0f;      // Near plane
-static float depthFar = 3500.0f;    // Far plane
+static float depthFar = 3500.0f;    // Far plane, I matched it with the camera farPlane to avoid render mixups
 
 // Skybox
 GLuint skyboxVAO;
@@ -102,6 +102,9 @@ static const GLuint skyboxIndices[] = {
    20,21,22, 20,22,23
 };
 
+// Practically the same as lab2 loadTextureTileBox()
+// I added CLAMP_TO_EDGE to prevent seams on spherical planets
+// depending on the type of file I had for the textures, it tend to fail so I added all formats I had the issue with
 GLuint LoadTexture(const char* image_path) {
 	GLuint textureID;
 	glGenTextures(1, &textureID);
@@ -109,10 +112,11 @@ GLuint LoadTexture(const char* image_path) {
 	int width, height, nrChannels;
 	unsigned char* data = stbi_load(image_path, &width, &height, &nrChannels, 0);
 	if (!data) {
-		printf("Failed to load texture: %s\n", image_path);
+		std::cout << "Failed to load texture: " << image_path << std::endl;
 		return 0;
 	}
 
+	// Check format depending on the number of channels
 	GLenum format = GL_RGB;
 	if (nrChannels == 1) format = GL_RED;
 	else if (nrChannels == 3) format = GL_RGB;
@@ -141,6 +145,7 @@ GLuint LoadTexture(const char* image_path) {
 	return textureID;
 }
 
+// Initialize skybox cube geometry and texture based on lab2
 void initSkybox() {
 	adjustSkyboxUV();
 
@@ -178,6 +183,8 @@ void initSkybox() {
 	skyboxTextureID = LoadTexture("../cloudWorld/assets/skybox/NebulaAtlas.png");
 }
 
+// Render skybox as background
+// disabled depth writing to ensure skybox renders behind everything
 void drawSkybox(const glm::mat4& Perspective, const glm::mat4& View) {
 	glDepthMask(GL_FALSE);
 	glUseProgram(skyboxProgramID);
@@ -199,8 +206,9 @@ void drawSkybox(const glm::mat4& Perspective, const glm::mat4& View) {
 }
 
 //For infinity camera movement
-static const float WORLD_SIZE = 200.0f;
+static const float WORLD_SIZE = 200.0f;		// infinite world cube size
 
+// Convert yaw and pitch angles to 3D direction vectors
 static glm::vec3 forwardDir() {
 	return glm::normalize(glm::vec3(
 		cos(pitch) * sin(yaw),
@@ -209,10 +217,15 @@ static glm::vec3 forwardDir() {
 	));
 }
 
+// perpendicular to forwards
 static glm::vec3 rightDir() {
 	return glm::normalize(glm::cross(forwardDir(), up));
 }
 
+// Infinite world wrapping functions
+// objects wrap around when they exceed world boundaries
+
+// Wrap a single coordinate value within [-period/2, period/2]
 static float wrapFloat(float value, float period) {
 	float half = period * 0.5f;
 	value = fmod(value + half, period);
@@ -220,12 +233,25 @@ static float wrapFloat(float value, float period) {
 	return value - half;
 }
 
+// Wrap 3D position within world cube
 static void wrapPosition(glm::vec3& p, float size) {
 	p.x = wrapFloat(p.x, size);
 	p.y = wrapFloat(p.y, size);
 	p.z = wrapFloat(p.z, size);
 }
 
+// Wrap planet position relative to camera for infinite illusion
+// Planets appear to wrap around as camera moves through world
+glm::vec3 wrapPlanetPosition(const glm::vec3& planetPos) {
+	glm::vec3 p = planetPos;
+	p.x = wrapFloat(p.x - eye_center.x, WORLD_SIZE) + eye_center.x;
+	p.y = wrapFloat(p.y - eye_center.y, WORLD_SIZE) + eye_center.y;
+	p.z = wrapFloat(p.z - eye_center.z, WORLD_SIZE) + eye_center.z;
+	return p;
+}
+
+// Initialize shadow framebuffer for shadow mapping
+// same as lab3
 static void initShadowFBO() {
 	// Generate framebuffer
 	glGenFramebuffers(1, &shadowFBO);
@@ -289,13 +315,14 @@ GLuint sphereVBO;
 GLuint sphereEBO;
 GLsizei sphereIndexCount = 0;
 
+// Procedural planets
 GLuint planetProgramID;
 GLuint planetMatrixID;
 GLuint planetModelID;
 //Planet creation and positions
 static const int NUM_PLANETS = 20;
 static const float PLANET_FIELD_RADIUS = 220.0f;
-static const float MIN_PLANET_DISTANCE = 80.0f;
+static const float MIN_PLANET_DISTANCE = 80.0f;		// Minimum separation
 //Textures
 static const int NUM_PLANET_TEXTURES = 20;
 GLuint planetTextures[NUM_PLANET_TEXTURES];
@@ -306,26 +333,18 @@ struct Planet {
 	float radius;
 	int textureIndex;
 	glm::mat4 modelMatrix;
-	glm::vec3 rotationAxis;
-	float rotationSpeed;
-	float rotationAngle;
+	glm::vec3 rotationAxis;		// Random rotation axis
+	float rotationSpeed;		// angular velocity
+	float rotationAngle;		// rotation angle for planet rotation effect
 };
-
 std::vector<Planet> planets;
 
 // Fog settings
 static bool fogEnabled = true;
-static glm::vec3 fogColor(0.02f, 0.02f, 0.08f);  // Dark blue, matching space theme
-static float fogDensity = 0.005f;  // Adjust for desired fog thickness
+static glm::vec3 fogColor(0.02f, 0.02f, 0.08f);  // a dark blue to match space theme
+static float fogDensity = 0.005f;  // fog thickness
 
-glm::vec3 wrapPlanetPosition(const glm::vec3& planetPos) {
-	glm::vec3 p = planetPos;
-	p.x = wrapFloat(p.x - eye_center.x, WORLD_SIZE) + eye_center.x;
-	p.y = wrapFloat(p.y - eye_center.y, WORLD_SIZE) + eye_center.y;
-	p.z = wrapFloat(p.z - eye_center.z, WORLD_SIZE) + eye_center.z;
-	return p;
-}
-
+// generate random point inside sphere for planet placement
 glm::vec3 randomInSphere(float radius) {
 	glm::vec3 p;
 	do {
@@ -335,16 +354,17 @@ glm::vec3 randomInSphere(float radius) {
 			(float(rand()) / RAND_MAX) * 2.0f - 1.0f
 		);
 	} while (glm::length(p) > 1.0f);
-
 	return p * radius;
 }
 
+// generate procedural UV sphere geometry with parametric equations for planets
 void createSphere(int stacks, int slices) {
 	// Sphere formula (inspired in quiz and lighting lecture)
-	// x= sin(ϕ) * cos(θ)
-	// y= cos(ϕ)
-	// z= sin(ϕ) * sin(θ)
-	// where ϕ ∈ [0,π] (stacks) and θ ∈ [0,2π] (slices).
+	// x = sin(ϕ) * cos(θ)
+	// y = cos(ϕ)
+	// z = sin(ϕ) * sin(θ)
+	// where ϕ ∈ [0,π] (stacks - latitude) and θ ∈ [0,2π] (slices - longitude).
+	// had to look at glm::pi<float>(); and glm::two_pi<float>(); from stackOverflow to maintain all decimals
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
@@ -372,6 +392,7 @@ void createSphere(int stacks, int slices) {
 
     for (int i = 0; i < stacks; ++i) {
         for (int j = 0; j < slices; ++j) {
+        	// unsigned int for index buffers
             uint32_t a = i * (slices + 1) + j;
             uint32_t b = (i + 1) * (slices + 1) + j;
             uint32_t c = b + 1;
@@ -420,12 +441,12 @@ void createSphere(int stacks, int slices) {
     glBindVertexArray(0);
 }
 
+// Humanoid from lab4
 MyBot bot;
-int humanoidPlanetIndex = -1;
-float humanoidAngle = 0.0f;
-float humanoidAngularSpeed = 0.5f;
-float humanoidRunRadiusFactor = 1.10f;
-static float botAnimTime = 0.0f;
+int humanoidPlanetIndex = -1;			// planet designated for humanoid
+float humanoidAngle = 0.0f;				// current position angle on planet
+float humanoidAngularSpeed = 0.5f;		// speed of orbit around planet
+static float botAnimTime = 0.0f;		// animation playback time (for bot.cpp)
 
 void init() {
 	glEnable(GL_DEPTH_TEST);
@@ -446,13 +467,14 @@ void init() {
 
 	createSphere(64, 64);
 	planets.clear();
-	srand(42);
+	srand(42); // normal randomizer
 
 	for (int i = 0; i < NUM_PLANETS; ++i) {
 		Planet p;
 		bool valid = false;
 
-		while (!valid) { // This time randomly placed planets need to respect minimal distances between other already created planets
+		while (!valid) {
+			// randomly placed planets need to respect minimal distances between other already created planets
 			p.position = randomInSphere(PLANET_FIELD_RADIUS);
 			glm::vec3 pWrapped = wrapPlanetPosition(p.position);
 			float t = float(rand()) / RAND_MAX;   // [0,1]
@@ -469,7 +491,7 @@ void init() {
 				// Gas giants (5% chance)
 				p.radius = 20.0f + t * 15.0f;  // 20-35 units
 			}
-			p.textureIndex = rand() % NUM_PLANET_TEXTURES;
+			p.textureIndex = static_cast<int>((float(rand()) / RAND_MAX) * NUM_PLANET_TEXTURES);
 			// random rotation axis
 			p.rotationAxis = glm::normalize(randomInSphere(1.0f));
 			// random angular speed (slow, space-like)
@@ -512,7 +534,7 @@ void init() {
 	planetTextures[15] = LoadTexture("../cloudWorld/assets/textures/terryCloth.jpg");
 	planetTextures[16] = LoadTexture("../cloudWorld/assets/textures/velourVelvet.jpg");
 	planetTextures[17] = LoadTexture("../cloudWorld/assets/textures/rock06.jpg");
-	planetTextures[18] = LoadTexture("../cloudWorld/assets/textures/rockBoulderCracked.jpg");
+	planetTextures[18] = LoadTexture("../cloudWorld/assets/textures/oldLinoleumFlooring.jpg");
 	planetTextures[19] = LoadTexture("../cloudWorld/assets/textures/rocksGround05.jpg");
 
 	planetTextureSampler = glGetUniformLocation(planetProgramID, "diffuseTexture");
@@ -630,6 +652,7 @@ void render() {
 	glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
 
 	// Restore default framebuffer
+	// Camera pass with shadows and lighting
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 	int windowWidth, windowHeight;
 	glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
@@ -705,7 +728,7 @@ void render() {
 		float theta = humanoidAngle;
 		float phi = glm::radians(25.0f);  // Latitude angle on planet
 
-		// position on unit sphere surface (shown in lectures and quiz)
+		// position on unit sphere surface
 		glm::vec3 localSurfacePos(
 			sin(phi) * cos(theta),
 			cos(phi),
@@ -798,14 +821,17 @@ void cleanup() {
 	bot.cleanup();
 }
 
+// removed the scancode and mode from the labs key_callbacks() because they were never used
+// and for the movement I wanted to do I needed the same variables as always
 static void key_callback(GLFWwindow* w, int key, int, int action, int) {
-	if (action == GLFW_PRESS && key == GLFW_KEY_ESCAPE)
+	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		// press esc to close window, say this for report (way better than clicking on the x button everytime)
 		glfwSetWindowShouldClose(w, 1);
 	if (key == GLFW_KEY_F && action == GLFW_PRESS) {
 		// Toggle fog on/off
 		fogEnabled = !fogEnabled;
 		bot.fogEnabled = fogEnabled;
+		// can see it in the terminal
 		std::cout << "Fog " << (fogEnabled ? "enabled" : "disabled") << std::endl;
 	}
 
@@ -827,7 +853,7 @@ static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 }
 
 int main() {
-	// Randomizer
+	// time based randomizer, got it from Google (I assume gemini) since a normal randomizer would start getting repetitive
 	std::srand(static_cast<unsigned int>(std::time(nullptr)) ^ uintptr_t(&main));
 
 	// Init GLFW
@@ -840,6 +866,8 @@ int main() {
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
+	// Open window and create its OpenGL context
+	// CLion recommended using nullptr instead of NULL for the monitor and share arguments
 	window = glfwCreateWindow(1280, 720, "Space World", nullptr, nullptr);
 	if (!window) {
 		std::cerr << "Failed to create window\n";
@@ -862,23 +890,27 @@ int main() {
 
 	double lastTime = glfwGetTime();
 
-	// FPS tracking as in lab4
+	// frame rate tracking as in lab4
 	float fTime = 0.0f;
 	unsigned long frames = 0;
 
 	// Render Loop
 	while (!glfwWindowShouldClose(window)) {
+		// delta time calculation
 		double now = glfwGetTime();
 		float dt = float(now - lastTime);
 
+		// update humanoid animations
 		humanoidAngle += humanoidAngularSpeed * dt;
 		botAnimTime += dt * playbackSpeed;
 		bot.update(botAnimTime);
+
+		// update planet rotations
 		for (Planet& p : planets) {
 			p.rotationAngle += p.rotationSpeed * dt;
 		}
 
-		// Shift key to increase speed if exploration is too slow
+		// left shift key to increase speed if exploration is too slow
 		float currentSpeed = speed;
 		if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
 			currentSpeed *= speedBoost;
@@ -886,19 +918,18 @@ int main() {
 		lastTime = now;
 		glfwPollEvents();
 
-		// Rotation
-		// Camera rotation with left, right, up and down key arrows
+		// camera rotation with left, right, up and down key arrows
 		if (glfwGetKey(window, GLFW_KEY_LEFT)  == GLFW_PRESS) yaw   -= 1.5f * dt;
 		if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) yaw   += 1.5f * dt;
 		if (glfwGetKey(window, GLFW_KEY_UP)    == GLFW_PRESS) pitch += 1.0f * dt;
 		if (glfwGetKey(window, GLFW_KEY_DOWN)  == GLFW_PRESS) pitch -= 1.0f * dt;
-		pitch = glm::clamp(pitch, -1.3f, 1.3f);
+		pitch = glm::clamp(pitch, -1.3f, 1.3f); // prevents camera from flipping
 
-		// Translation
+		// camera translation (WASD and QE)
 		glm::vec3 fwd = forwardDir();
 		glm::vec3 rgt = rightDir();
 
-		// Positional movement with WASD for forward, backward, left and right
+		// WASD for forward, left, backward, and right respectively
 		// QE for up and down respectively
 		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) eye_center += fwd * currentSpeed * dt;
 		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) eye_center -= fwd * currentSpeed * dt;
@@ -907,14 +938,14 @@ int main() {
 		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) eye_center += up  * currentSpeed * dt;
 		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) eye_center -= up  * currentSpeed * dt;
 
-		// Limit exploration - infinity illusion
+		// wrap camera position for the infinite world effect
 		wrapPosition(eye_center, WORLD_SIZE);
 
 		int w, h;
 		glfwGetFramebufferSize(window, &w, &h);
 		glViewport(0, 0, w, h);
 
-		// Matrices (computed but not used yet)
+		// perspective and view matrices
 		glm::mat4 Perspective = glm::perspective(glm::radians(60.0f),
 									   (float)w / (float)h,
 									   0.1f, 1000.0f);
@@ -940,10 +971,15 @@ int main() {
 			glfwSetWindowTitle(window, ss.str().c_str());
 		}
 
+		// since I do normal while loop, the swapping of buffers is done during the loop
 		glfwSwapBuffers(window);
 	}
 
+	// clean up for all models
 	cleanup();
+
+	// Close OpenGL window and terminate GLFW
 	glfwTerminate();
+
 	return 0;
 }
