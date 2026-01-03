@@ -390,8 +390,8 @@ void MyBot::initialize() {
 	cameraPosition = glm::vec3(0.0f);
 
 	// Calculate skeleton root offset to position bot properly
-	// from my debugging: the skeleton's root joint may not be at the model's geometric center,
-	// so I compute an offset to align them
+	// from my debugging: the skeleton's root joint was never at the model's (designated planet) geometric center,
+	// so I computed the offset to align them
 	glm::vec3 skeletonRoot(0.0f);
 	if (!skinObjects.empty() && !skinObjects[0].inverseBindMatrices.empty()) {
 		// Get the inverse of the first inverse bind matrix to get the bind pose
@@ -399,7 +399,7 @@ void MyBot::initialize() {
 		skeletonRoot = glm::vec3(bindPose[3]);
 	}
 
-	// Calculate the offset needed
+	// offset
 	skeletonOffset = -(skeletonRoot + modelCenter);
 
 	// Prepare joint matrices

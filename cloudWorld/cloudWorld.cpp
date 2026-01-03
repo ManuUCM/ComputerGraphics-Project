@@ -467,13 +467,15 @@ void init() {
 
 	createSphere(64, 64);
 	planets.clear();
-	srand(42); // normal randomizer
 
 	for (int i = 0; i < NUM_PLANETS; ++i) {
 		Planet p;
 		bool valid = false;
+		int attempts = 0;
+		const int MAX_ATTEMPTS = 1000;  // Add safety limit
 
-		while (!valid) {
+		while (!valid && attempts < MAX_ATTEMPTS) {
+			attempts++;
 			// randomly placed planets need to respect minimal distances between other already created planets
 			p.position = randomInSphere(PLANET_FIELD_RADIUS);
 			glm::vec3 pWrapped = wrapPlanetPosition(p.position);
@@ -508,7 +510,8 @@ void init() {
 				}
 			}
 		}
-		planets.push_back(p);
+		if (valid)  // Only add if it found valid position
+			planets.push_back(p);
 	}
 
 	planetProgramID = LoadShadersFromFile(
