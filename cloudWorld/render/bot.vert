@@ -24,13 +24,19 @@ uniform mat4 LightVP;
 
 
 void main() {
+    // Linear blend skinning - combine joint transformations weighted by influence
     mat4 skinMatrix =
     weights.x * jointMatrices[joints.x] +
     weights.y * jointMatrices[joints.y] +
     weights.z * jointMatrices[joints.z] +
     weights.w * jointMatrices[joints.w];
 
+    // Apply skinning transformation to vertex
     vec4 skinnedPosition = skinMatrix * vec4(vertexPosition, 1.0);
+    // normalize model position: center at origin, align skeleton root, and scale to unit size
+    // modelCenter: humanoid's geometric center from GLTF bounding box
+    // skeletonOffset: offset from geometric center to skeleton root joint
+    // modelScale: normalization factor to scale model to approx. 1 unit
     vec3 centered = (skinnedPosition.xyz + modelCenter + skeletonOffset) * modelScale;
     vec4 worldPos = M * vec4(centered, 1.0);
 

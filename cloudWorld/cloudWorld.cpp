@@ -24,12 +24,12 @@ static glm::vec3 eye_center(0.0f, 0.0f, 10.0f);
 static glm::vec3 lookat(0.0f, 0.0f, 0.0f);
 static glm::vec3 up(0.0f, 1.0f, 0.0f);
 
-// For camera rotation where yax control horizontal and pitch controls vertical rotation
+// For camera rotation where yaw control horizontal and pitch controls vertical rotation
 static float yaw = 0.0f;    // left/right
 static float pitch = 0.0f;  // up/down
 static float speed = 10.0f;
-// Default movement is slow but adequate for an analyzing exploration
-// however I added a speedbost pressing left shift to increase exploration movement for all directions
+// Default movement is slow but adequate for detailed exploration
+// I added a speedbost pressing left shift to increase exploration movement for all directions
 static float speedBoost = 2.5f;
 
 //Lighting
@@ -103,7 +103,7 @@ static const GLuint skyboxIndices[] = {
 };
 
 // Practically the same as lab2 loadTextureTileBox()
-// I added CLAMP_TO_EDGE to prevent seams on spherical planets
+// modifications include CLAMP_TO_EDGE to prevent seams on spherical planets
 // depending on the type of file I had for the textures, it tend to fail so I added all formats I had the issue with
 GLuint LoadTexture(const char* image_path) {
 	GLuint textureID;
@@ -331,7 +331,7 @@ GLuint planetTextureSampler;
 struct Planet {
 	glm::vec3 position;
 	float radius;
-	int textureIndex;
+	int textureIndex;			// chosen texture for planet
 	glm::mat4 modelMatrix;
 	glm::vec3 rotationAxis;		// Random rotation axis
 	float rotationSpeed;		// angular velocity
@@ -364,7 +364,7 @@ void createSphere(int stacks, int slices) {
 	// y = cos(ϕ)
 	// z = sin(ϕ) * sin(θ)
 	// where ϕ ∈ [0,π] (stacks - latitude) and θ ∈ [0,2π] (slices - longitude).
-	// had to look at glm::pi<float>(); and glm::two_pi<float>(); from stackOverflow to maintain all decimals
+	// had to look at glm::pi<float>() and glm::two_pi<float>() from stackOverflow to maintain all decimals
     std::vector<Vertex> vertices;
     std::vector<uint32_t> indices;
 
@@ -448,6 +448,12 @@ float humanoidAngle = 0.0f;				// current position angle on planet
 float humanoidAngularSpeed = 0.5f;		// speed of orbit around planet
 static float botAnimTime = 0.0f;		// animation playback time (for bot.cpp)
 
+// initialize all rendering resources
+// - Shadow framebuffer
+// - Skybox
+// - procedural sphere geometry
+// - planet textures and procedural generation
+// - bot model and animation
 void init() {
 	glEnable(GL_DEPTH_TEST);
 
@@ -472,7 +478,7 @@ void init() {
 		Planet p;
 		bool valid = false;
 		int attempts = 0;
-		const int MAX_ATTEMPTS = 1000;  // Add safety limit
+		const int MAX_ATTEMPTS = 1000;  // Add safety limit if it reaches more than 1000 attempts to get a valid planet
 
 		while (!valid && attempts < MAX_ATTEMPTS) {
 			attempts++;
@@ -496,7 +502,7 @@ void init() {
 			p.textureIndex = static_cast<int>((float(rand()) / RAND_MAX) * NUM_PLANET_TEXTURES);
 			// random rotation axis
 			p.rotationAxis = glm::normalize(randomInSphere(1.0f));
-			// random angular speed (slow, space-like)
+			// random angular speed (slow)
 			p.rotationSpeed = 0.1f + (float(rand()) / RAND_MAX) * 0.3f;
 			// initial angle
 			p.rotationAngle = (float(rand()) / RAND_MAX) * glm::two_pi<float>();
@@ -518,7 +524,7 @@ void init() {
 	"../cloudWorld/render/box.vert",
 	"../cloudWorld/render/box.frag"
 	);
-	// Total of 20 textures, could be too much but given the randomness sometimes it can give cool combinations
+	// Total of 20 textures, could be too much but given the randomness in each run, sometimes it can give cool combinations
 	planetTextures[0] = LoadTexture("../cloudWorld/assets/textures/aerialRock.jpg");
 	planetTextures[1] = LoadTexture("../cloudWorld/assets/textures/wafflePiqueCotton.jpg");
 	planetTextures[2] = LoadTexture("../cloudWorld/assets/textures/jerseyMelange.jpg");
@@ -553,7 +559,7 @@ void init() {
 }
 
 void render() {
-	// light's view-projection matrix calculation for shadow map
+	// light's view-projection matrix calculation
 	glm::vec3 lightPos = eye_center + glm::normalize(-lightDirection) * 200.0f;
 	glm::mat4 lightView = glm::lookAt(
 		lightPos,
@@ -595,12 +601,12 @@ void render() {
 			glm::rotate(glm::mat4(1.0f), p.rotationAngle, p.rotationAxis) *
 			glm::scale(glm::mat4(1.0f), glm::vec3(p.radius));
 
-		// Use lightVP instead of camera MVP
+		// using lightVP instead of camera MVP
 		glm::mat4 lightMVP = lightVP * p.modelMatrix;
 		glUniformMatrix4fv(planetMatrixID, 1, GL_FALSE, glm::value_ptr(lightMVP));
 		glUniformMatrix4fv(planetModelID, 1, GL_FALSE, glm::value_ptr(p.modelMatrix));
 
-		// Pass LightVP to shader
+		// pass LightVP to shader
 		GLuint lightVPID = glGetUniformLocation(planetProgramID, "LightVP");
 		glUniformMatrix4fv(lightVPID, 1, GL_FALSE, glm::value_ptr(lightVP));
 
@@ -611,7 +617,7 @@ void render() {
 	glUseProgram(0);
 
 	// render bot shadow pass
-	// comments on each line for humanoid rendering are done in the light rendering
+	// ***comments on each line for humanoid rendering are done in the camera pass render***
 	if (humanoidPlanetIndex >= 0 && humanoidPlanetIndex < planets.size()) {
 		const Planet& hp = planets[humanoidPlanetIndex];
 		glm::vec3 wrappedPlanetPos = wrapPlanetPosition(hp.position);
@@ -694,6 +700,7 @@ void render() {
 
 		glm::vec3 wrappedPos = wrapPlanetPosition(p.position);
 
+		// specific planet model matrix, stored for humanoid positioning
 		p.modelMatrix =
 			glm::translate(glm::mat4(1.0f), wrappedPos) *
 				glm::rotate(glm::mat4(1.0f), p.rotationAngle, p.rotationAxis) *
@@ -764,7 +771,7 @@ void render() {
 		// Scale humanoid proportionally to planet size
 		float humanoidScale = hp.radius * 2.0f; // looks a little unrealistic but it's funny to see for the fantasy of the world
 
-		// calculate a correction offset (trial and error procedure, could not reason any other approach after much debugging)
+		// calculate a correction offset (trial and error procedure, best results approach after much debugging)
 		glm::vec3 botPositionCorrection = glm::vec3(1, 0, 1);  // Start with zero
 
 		// correction to the humanoid's world position to bring it towards the chosen planet
@@ -785,8 +792,9 @@ void render() {
 
 		// Debugging sphere to help place the humanoid right at the planet
 		// sphere being mapped with the box shaders was perfectly placed near the planet
-		// so I used this markerSphere to approximate the distance to the bot that had an additional
-		// given the joints offset
+		// so I created this markerSphere to approximate the distance to the bot that had an additional offset
+		// given by the joints' set up
+		// I left the code commented instead of removing it for the importance it had during debugging
 
 		// glm::mat4 markerModel =
 		// 	glm::translate(glm::mat4(1.0f), humanoidWorldPos) *
@@ -824,7 +832,7 @@ void cleanup() {
 	bot.cleanup();
 }
 
-// removed the scancode and mode from the labs key_callbacks() because they were never used
+// removed the scancode and mode arguments from the labs definition of key_callbacks() because they were never used
 // and for the movement I wanted to do I needed the same variables as always
 static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
@@ -856,7 +864,7 @@ static void key_callback(GLFWwindow* w, int key, int, int action, int) {
 }
 
 int main() {
-	// time based randomizer, got it from Google (I assume gemini) since a normal randomizer would start getting repetitive
+	// time based randomizer, got it from Google (I assume gemini) since a normal srand(i.e 42) randomizer would start getting repetitive
 	std::srand(static_cast<unsigned int>(std::time(nullptr)) ^ uintptr_t(&main));
 
 	// Init GLFW
@@ -929,15 +937,15 @@ int main() {
 		pitch = glm::clamp(pitch, -1.3f, 1.3f); // prevents camera from flipping
 
 		// camera translation (WASD and QE)
-		glm::vec3 fwd = forwardDir();
-		glm::vec3 rgt = rightDir();
+		glm::vec3 forward = forwardDir();
+		glm::vec3 right = rightDir();
 
 		// WASD for forward, left, backward, and right respectively
 		// QE for up and down respectively
-		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) eye_center += fwd * currentSpeed * dt;
-		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) eye_center -= fwd * currentSpeed * dt;
-		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) eye_center -= rgt * currentSpeed * dt;
-		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) eye_center += rgt * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) eye_center += forward * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) eye_center -= forward * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) eye_center -= right * currentSpeed * dt;
+		if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) eye_center += right * currentSpeed * dt;
 		if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) eye_center += up  * currentSpeed * dt;
 		if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) eye_center -= up  * currentSpeed * dt;
 
@@ -947,12 +955,6 @@ int main() {
 		int w, h;
 		glfwGetFramebufferSize(window, &w, &h);
 		glViewport(0, 0, w, h);
-
-		// perspective and view matrices
-		glm::mat4 Perspective = glm::perspective(glm::radians(60.0f),
-									   (float)w / (float)h,
-									   0.1f, 1000.0f);
-		glm::mat4 View = glm::lookAt(eye_center, lookat, up);
 
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -974,7 +976,7 @@ int main() {
 			glfwSetWindowTitle(window, ss.str().c_str());
 		}
 
-		// since I do normal while loop, the swapping of buffers is done during the loop
+		// since I do a standard while loop, the swapping of buffers is done during the loop
 		glfwSwapBuffers(window);
 	}
 

@@ -4,7 +4,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <tiny_gltf.h>
-#include <sys/stat.h>
 
 // lighting and shadow parameters for all bot instances
 glm::vec3 MyBot::lightDirection;
@@ -352,7 +351,6 @@ bool MyBot::loadModel(tinygltf::Model &model, const char *filename) {
 }
 
 void MyBot::initialize() {
-	// Modify your path if needed
 	if (!loadModel(model, "../cloudWorld/assets/models/bot/bot.gltf")) {
 		return;
 	}
@@ -390,7 +388,7 @@ void MyBot::initialize() {
 	cameraPosition = glm::vec3(0.0f);
 
 	// Calculate skeleton root offset to position bot properly
-	// from my debugging: the skeleton's root joint was never at the model's (designated planet) geometric center,
+	// from my debugging: the skeleton's root joint was never at the model's geometric center,
 	// so I computed the offset to align them
 	glm::vec3 skeletonRoot(0.0f);
 	if (!skinObjects.empty() && !skinObjects[0].inverseBindMatrices.empty()) {
@@ -409,9 +407,9 @@ void MyBot::initialize() {
 	animationObjects = prepareAnimation(model);
 
 	// Create and compile our GLSL program from the shaders
-	std::cout << "Debug: Loading shader..." << std::endl;
+	std::cout << "Loading shader..." << std::endl;
 	programID = LoadShadersFromFile("../cloudWorld/render/bot.vert", "../cloudWorld/render/bot.frag");
-	std::cout << "Debug: programID = " << programID << std::endl;
+	std::cout << "programID = " << programID << std::endl;
 	if (programID == 0)
 	{
 		std::cerr << "Failed to load shaders." << std::endl;
@@ -422,14 +420,6 @@ void MyBot::initialize() {
 	std::cout << "  Vertex: ../cloudWorld/render/bot.vert" << std::endl;
 	std::cout << "  Fragment: ../cloudWorld/render/bot.frag" << std::endl;
 
-	// Verify the file timestamp:
-	struct stat vertStat;
-	if (stat("../cloudWorld/render/bot.vert", &vertStat) == 0) {
-		std::cout << "bot.vert last modified: " << ctime(&vertStat.st_mtime);
-	} else {
-		std::cerr << "WARNING: Cannot stat bot.vert file!" << std::endl;
-	}
-
 	// Get a handle for GLSL variables
 	mvpMatrixID = glGetUniformLocation(programID, "MVP");
 	//lightPositionID = glGetUniformLocation(programID, "lightPosition");
@@ -438,9 +428,9 @@ void MyBot::initialize() {
 	// I need the ID for the skinning To-Do in render() -> "Set animation data for linear blend skinning in shader"
 	jointMatricesID = glGetUniformLocation(programID, "jointMatrices");
 	modelMatrixID = glGetUniformLocation(programID, "M");
-	std::cout << "Debug: jointMatricesID = " << jointMatricesID << std::endl;
-	std::cout << "Debug: mvpMatrixID = " << mvpMatrixID << std::endl;
-	std::cout << "Debug: modelMatrixID = " << modelMatrixID << std::endl;
+	std::cout << "jointMatricesID = " << jointMatricesID << std::endl;
+	std::cout << "mvpMatrixID = " << mvpMatrixID << std::endl;
+	std::cout << "modelMatrixID = " << modelMatrixID << std::endl;
 }
 
 void MyBot::bindMesh(std::vector<PrimitiveObject> &primitiveObjects,

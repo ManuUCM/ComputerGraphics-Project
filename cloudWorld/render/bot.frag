@@ -35,6 +35,7 @@ void main()
 
 	// Ambient lighting (similar to planets)
 	// Add hemispherical environment lighting
+	// explanatory comments on said lighting choice and set up is done in box.frag
 	float hemi = clamp(N.y * 0.5 + 0.5, 0.0, 1.0);
 	vec3 ambient = envColor * hemi;
 
@@ -69,7 +70,7 @@ void main()
 		fogFactor = clamp(fogFactor, 0.0, 1.0);
 
 		// Mix color with fog: finalColor = mix(fogColor, objectColor, fogFactor)
-		// fogFactor = 1.0 means no fog (close), fogFactor = 0.0 means full fog (far)
+		// fogFactor = 1.0 means no fog, fogFactor = 0.0 means full fog (far)
 		color = mix(fogColor, color, fogFactor);
 	}
 

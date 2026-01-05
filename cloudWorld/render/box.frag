@@ -85,7 +85,8 @@ void main(){
 		float fogFactor = exp(-pow(fogDensity * distance, 2.0));
 		fogFactor = clamp(fogFactor, 0.0, 1.0);
 
-		// Mix color with fog
+		// combine color with fog
+		// linear interpolation using mix(start range, end range, value to interpolate between)
 		color = mix(fogColor, color, fogFactor);
 	}
 
